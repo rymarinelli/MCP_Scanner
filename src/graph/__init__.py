@@ -1,5 +1,5 @@
-"""Graph package exports."""
+"""Graph enrichment utilities."""
 
-from .base import GraphClient
+from .enrichers import SemgrepFindingCorrelator, correlate_semgrep_findings
 
-__all__ = ["GraphClient"]
+__all__ = ["SemgrepFindingCorrelator", "correlate_semgrep_findings"]
