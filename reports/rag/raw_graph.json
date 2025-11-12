@@ -1,0 +1,1738 @@
+{
+  "nodes": [
+    {
+      "id": "pyproject.toml",
+      "type": "file",
+      "label": "pyproject.toml",
+      "properties": {
+        "path": "pyproject.toml",
+        "extension": ".toml",
+        "size_bytes": 532,
+        "modified": 1762981017.463236,
+        "sha1": "7ad20370c094c4c51d81693a63fec30dec7ba490",
+        "language": "toml"
+      }
+    },
+    {
+      "id": "semgrep_runner.py",
+      "type": "file",
+      "label": "semgrep_runner.py",
+      "properties": {
+        "path": "semgrep_runner.py",
+        "extension": ".py",
+        "size_bytes": 8038,
+        "modified": 1762981017.463236,
+        "sha1": "a83f7b06f90d7725d3b1667ef3810c9ba720137b",
+        "language": "python"
+      }
+    },
+    {
+      "id": "semgrep_runner.py::def::load_config:66",
+      "type": "function",
+      "label": "load_config",
+      "properties": {
+        "defined_in": "semgrep_runner.py",
+        "lineno": 66,
+        "docstring": "Load runner configuration from disk.",
+        "async": false
+      }
+    },
+    {
+      "id": "semgrep_runner.py::def::build_command:93",
+      "type": "function",
+      "label": "build_command",
+      "properties": {
+        "defined_in": "semgrep_runner.py",
+        "lineno": 93,
+        "docstring": "Construct the Semgrep CLI command.",
+        "async": false
+      }
+    },
+    {
+      "id": "semgrep_runner.py::def::execute_semgrep:103",
+      "type": "function",
+      "label": "execute_semgrep",
+      "properties": {
+        "defined_in": "semgrep_runner.py",
+        "lineno": 103,
+        "docstring": "Execute Semgrep and capture the output.",
+        "async": false
+      }
+    },
+    {
+      "id": "semgrep_runner.py::def::interpret_result:108",
+      "type": "function",
+      "label": "interpret_result",
+      "properties": {
+        "defined_in": "semgrep_runner.py",
+        "lineno": 108,
+        "docstring": "Interpret Semgrep's exit code and stdout/stderr into a structured response.",
+        "async": false
+      }
+    },
+    {
+      "id": "semgrep_runner.py::def::write_output:152",
+      "type": "function",
+      "label": "write_output",
+      "properties": {
+        "defined_in": "semgrep_runner.py",
+        "lineno": 152,
+        "docstring": "",
+        "async": false
+      }
+    },
+    {
+      "id": "semgrep_runner.py::def::parse_args:162",
+      "type": "function",
+      "label": "parse_args",
+      "properties": {
+        "defined_in": "semgrep_runner.py",
+        "lineno": 162,
+        "docstring": "",
+        "async": false
+      }
+    },
+    {
+      "id": "semgrep_runner.py::def::main:184",
+      "type": "function",
+      "label": "main",
+      "properties": {
+        "defined_in": "semgrep_runner.py",
+        "lineno": 184,
+        "docstring": "",
+        "async": false
+      }
+    },
+    {
+      "id": "README.md",
+      "type": "file",
+      "label": "README.md",
+      "properties": {
+        "path": "README.md",
+        "extension": ".md",
+        "size_bytes": 1403,
+        "modified": 1762981017.463236,
+        "sha1": "16fde5a880b16b430ba752fe366d415f96c86cbc",
+        "language": "markdown"
+      }
+    },
+    {
+      "id": "tests/test_cli.py",
+      "type": "file",
+      "label": "test_cli.py",
+      "properties": {
+        "path": "tests/test_cli.py",
+        "extension": ".py",
+        "size_bytes": 1219,
+        "modified": 1762981017.463236,
+        "sha1": "ebc7cf3f8a9dd5dc6411fe258403b84c9d8676f3",
+        "language": "python"
+      }
+    },
+    {
+      "id": "tests/test_cli.py::def::run_cli:14",
+      "type": "function",
+      "label": "run_cli",
+      "properties": {
+        "defined_in": "tests/test_cli.py",
+        "lineno": 14,
+        "docstring": "",
+        "async": false
+      }
+    },
+    {
+      "id": "tests/test_cli.py::def::test_run_tool_echo:28",
+      "type": "function",
+      "label": "test_run_tool_echo",
+      "properties": {
+        "defined_in": "tests/test_cli.py",
+        "lineno": 28,
+        "docstring": "",
+        "async": false
+      }
+    },
+    {
+      "id": "tests/test_cli.py::def::test_run_tool_unknown:37",
+      "type": "function",
+      "label": "test_run_tool_unknown",
+      "properties": {
+        "defined_in": "tests/test_cli.py",
+        "lineno": 37,
+        "docstring": "",
+        "async": false
+      }
+    },
+    {
+      "id": "tests/test_http.py",
+      "type": "file",
+      "label": "test_http.py",
+      "properties": {
+        "path": "tests/test_http.py",
+        "extension": ".py",
+        "size_bytes": 2536,
+        "modified": 1762981017.463236,
+        "sha1": "b0d81f5e6184440d891817d1d2dd31d3e1a9439b",
+        "language": "python"
+      }
+    },
+    {
+      "id": "tests/test_http.py::def::reload_http_module:20",
+      "type": "function",
+      "label": "reload_http_module",
+      "properties": {
+        "defined_in": "tests/test_http.py",
+        "lineno": 20,
+        "docstring": "Reload the HTTP module to evaluate import-time side effects.",
+        "async": false
+      }
+    },
+    {
+      "id": "tests/test_http.py::def::test_tools_module_is_imported_on_startup:26",
+      "type": "function",
+      "label": "test_tools_module_is_imported_on_startup",
+      "properties": {
+        "defined_in": "tests/test_http.py",
+        "lineno": 26,
+        "docstring": "The HTTP module should import the tools registry during startup.",
+        "async": false
+      }
+    },
+    {
+      "id": "tests/test_http.py::def::test_call_tool_delegates_to_core:34",
+      "type": "function",
+      "label": "test_call_tool_delegates_to_core",
+      "properties": {
+        "defined_in": "tests/test_http.py",
+        "lineno": 34,
+        "docstring": "The route should delegate execution to the core runner.",
+        "async": false
+      }
+    },
+    {
+      "id": "tests/test_http.py::def::test_call_tool_uses_default_arguments:62",
+      "type": "function",
+      "label": "test_call_tool_uses_default_arguments",
+      "properties": {
+        "defined_in": "tests/test_http.py",
+        "lineno": 62,
+        "docstring": "The route should supply an empty arguments mapping when omitted.",
+        "async": false
+      }
+    },
+    {
+      "id": "tests/test_remediation.py",
+      "type": "file",
+      "label": "test_remediation.py",
+      "properties": {
+        "path": "tests/test_remediation.py",
+        "extension": ".py",
+        "size_bytes": 2451,
+        "modified": 1762981017.463236,
+        "sha1": "72a3fe828abd5362f551372117c47babf3c576d0",
+        "language": "python"
+      }
+    },
+    {
+      "id": "tests/test_remediation.py::def::make_context:32",
+      "type": "function",
+      "label": "make_context",
+      "properties": {
+        "defined_in": "tests/test_remediation.py",
+        "lineno": 32,
+        "docstring": "",
+        "async": false
+      }
+    },
+    {
+      "id": "tests/test_remediation.py::def::test_suggest_persists_proposals:41",
+      "type": "function",
+      "label": "test_suggest_persists_proposals",
+      "properties": {
+        "defined_in": "tests/test_remediation.py",
+        "lineno": 41,
+        "docstring": "",
+        "async": false
+      }
+    },
+    {
+      "id": "tests/test_remediation.py::def::test_attach_validation_results_updates_disk:55",
+      "type": "function",
+      "label": "test_attach_validation_results_updates_disk",
+      "properties": {
+        "defined_in": "tests/test_remediation.py",
+        "lineno": 55,
+        "docstring": "",
+        "async": false
+      }
+    },
+    {
+      "id": "semgrep_rules/config.json",
+      "type": "file",
+      "label": "config.json",
+      "properties": {
+        "path": "semgrep_rules/config.json",
+        "extension": ".json",
+        "size_bytes": 212,
+        "modified": 1762981017.463236,
+        "sha1": "88cc13f56d78c3a16178c3c45db6e8413ff794bb",
+        "language": "json"
+      }
+    },
+    {
+      "id": "semgrep_rules/custom/insecure_eval.yaml",
+      "type": "file",
+      "label": "insecure_eval.yaml",
+      "properties": {
+        "path": "semgrep_rules/custom/insecure_eval.yaml",
+        "extension": ".yaml",
+        "size_bytes": 549,
+        "modified": 1762981017.463236,
+        "sha1": "9568c6370ea7f9e1a3dc498bdf09a139ca2e8af7",
+        "language": "yaml"
+      }
+    },
+    {
+      "id": "src/mcp_scanner/dspy_programs.py",
+      "type": "file",
+      "label": "dspy_programs.py",
+      "properties": {
+        "path": "src/mcp_scanner/dspy_programs.py",
+        "extension": ".py",
+        "size_bytes": 5519,
+        "modified": 1762981017.463236,
+        "sha1": "aee4f8445250e40c20d472ae23437fb999ff6303",
+        "language": "python"
+      }
+    },
+    {
+      "id": "src/mcp_scanner/dspy_programs.py::def::_format_dict:17",
+      "type": "function",
+      "label": "_format_dict",
+      "properties": {
+        "defined_in": "src/mcp_scanner/dspy_programs.py",
+        "lineno": 17,
+        "docstring": "Format a dictionary into a deterministic, human-friendly string.",
+        "async": false
+      }
+    },
+    {
+      "id": "src/mcp_scanner/dspy_programs.py::def::_parse_json_output:46",
+      "type": "function",
+      "label": "_parse_json_output",
+      "properties": {
+        "defined_in": "src/mcp_scanner/dspy_programs.py",
+        "lineno": 46,
+        "docstring": "Attempt to parse a JSON payload containing patch suggestions.",
+        "async": false
+      }
+    },
+    {
+      "id": "src/mcp_scanner/dspy_programs.py::def::normalize_patches:143",
+      "type": "function",
+      "label": "normalize_patches",
+      "properties": {
+        "defined_in": "src/mcp_scanner/dspy_programs.py",
+        "lineno": 143,
+        "docstring": "Convert a DSPy response into typed patch proposals.",
+        "async": false
+      }
+    },
+    {
+      "id": "src/mcp_scanner/remediation.py",
+      "type": "file",
+      "label": "remediation.py",
+      "properties": {
+        "path": "src/mcp_scanner/remediation.py",
+        "extension": ".py",
+        "size_bytes": 2960,
+        "modified": 1762981017.463236,
+        "sha1": "2703bd2573cece4f947c529d8b68b63be4b28796",
+        "language": "python"
+      }
+    },
+    {
+      "id": "src/mcp_scanner/models.py",
+      "type": "file",
+      "label": "models.py",
+      "properties": {
+        "path": "src/mcp_scanner/models.py",
+        "extension": ".py",
+        "size_bytes": 2841,
+        "modified": 1762981017.463236,
+        "sha1": "67fdc42f5a8b3660f18e299a73e587457237b5ff",
+        "language": "python"
+      }
+    },
+    {
+      "id": "src/mcp_scanner/models.py::def::ensure_directory:91",
+      "type": "function",
+      "label": "ensure_directory",
+      "properties": {
+        "defined_in": "src/mcp_scanner/models.py",
+        "lineno": 91,
+        "docstring": "Ensure that a directory exists.",
+        "async": false
+      }
+    },
+    {
+      "id": "src/mcp_scanner/validation.py",
+      "type": "file",
+      "label": "validation.py",
+      "properties": {
+        "path": "src/mcp_scanner/validation.py",
+        "extension": ".py",
+        "size_bytes": 1420,
+        "modified": 1762981017.463236,
+        "sha1": "ae3fa7afa915433c25abbdbd934a9269795fc74b",
+        "language": "python"
+      }
+    },
+    {
+      "id": "src/mcp_scanner/__init__.py",
+      "type": "file",
+      "label": "__init__.py",
+      "properties": {
+        "path": "src/mcp_scanner/__init__.py",
+        "extension": ".py",
+        "size_bytes": 500,
+        "modified": 1762981017.463236,
+        "sha1": "c3ad1c5de351da2364100d302fa6c329dd7623e6",
+        "language": "python"
+      }
+    },
+    {
+      "id": "src/fastapi/testclient.py",
+      "type": "file",
+      "label": "testclient.py",
+      "properties": {
+        "path": "src/fastapi/testclient.py",
+        "extension": ".py",
+        "size_bytes": 827,
+        "modified": 1762981017.463236,
+        "sha1": "2cdf7d8c399f85b927bd2e8c206bd4d78357e7d3",
+        "language": "python"
+      }
+    },
+    {
+      "id": "src/fastapi/app.py",
+      "type": "file",
+      "label": "app.py",
+      "properties": {
+        "path": "src/fastapi/app.py",
+        "extension": ".py",
+        "size_bytes": 2699,
+        "modified": 1762981017.463236,
+        "sha1": "864775c1243529f0a0185b39d45902eac856a600",
+        "language": "python"
+      }
+    },
+    {
+      "id": "src/fastapi/app.py::def::_ensure_awaitable:39",
+      "type": "function",
+      "label": "_ensure_awaitable",
+      "properties": {
+        "defined_in": "src/fastapi/app.py",
+        "lineno": 39,
+        "docstring": "",
+        "async": true
+      }
+    },
+    {
+      "id": "src/fastapi/app.py::def::_evaluate_annotation:45",
+      "type": "function",
+      "label": "_evaluate_annotation",
+      "properties": {
+        "defined_in": "src/fastapi/app.py",
+        "lineno": 45,
+        "docstring": "",
+        "async": false
+      }
+    },
+    {
+      "id": "src/fastapi/app.py::def::_build_payload:51",
+      "type": "function",
+      "label": "_build_payload",
+      "properties": {
+        "defined_in": "src/fastapi/app.py",
+        "lineno": 51,
+        "docstring": "",
+        "async": false
+      }
+    },
+    {
+      "id": "src/fastapi/app.py::def::_render_response:67",
+      "type": "function",
+      "label": "_render_response",
+      "properties": {
+        "defined_in": "src/fastapi/app.py",
+        "lineno": 67,
+        "docstring": "",
+        "async": false
+      }
+    },
+    {
+      "id": "src/fastapi/__init__.py",
+      "type": "file",
+      "label": "__init__.py",
+      "properties": {
+        "path": "src/fastapi/__init__.py",
+        "extension": ".py",
+        "size_bytes": 188,
+        "modified": 1762981017.463236,
+        "sha1": "5bd55b9d383599647a7e48aa1673cec8c20251e9",
+        "language": "python"
+      }
+    },
+    {
+      "id": "src/graph/base.py",
+      "type": "file",
+      "label": "base.py",
+      "properties": {
+        "path": "src/graph/base.py",
+        "extension": ".py",
+        "size_bytes": 814,
+        "modified": 1762981017.463236,
+        "sha1": "d236572c9b40fd51526445bc92e52aa87826042d",
+        "language": "python"
+      }
+    },
+    {
+      "id": "src/graph/__init__.py",
+      "type": "file",
+      "label": "__init__.py",
+      "properties": {
+        "path": "src/graph/__init__.py",
+        "extension": ".py",
+        "size_bytes": 181,
+        "modified": 1762981017.463236,
+        "sha1": "3aa8a115a042c069742cc45f80cf3389b08e6981",
+        "language": "python"
+      }
+    },
+    {
+      "id": "src/graph/enrichers.py",
+      "type": "file",
+      "label": "enrichers.py",
+      "properties": {
+        "path": "src/graph/enrichers.py",
+        "extension": ".py",
+        "size_bytes": 7571,
+        "modified": 1762981017.463236,
+        "sha1": "f93987fba102ac32fb762b851a4655d0e0e2cdf1",
+        "language": "python"
+      }
+    },
+    {
+      "id": "src/graph/enrichers.py::def::correlate_semgrep_findings:191",
+      "type": "function",
+      "label": "correlate_semgrep_findings",
+      "properties": {
+        "defined_in": "src/graph/enrichers.py",
+        "lineno": 191,
+        "docstring": "Convenience helper around :class:`SemgrepFindingCorrelator`.",
+        "async": false
+      }
+    },
+    {
+      "id": "src/scanners/base.py",
+      "type": "file",
+      "label": "base.py",
+      "properties": {
+        "path": "src/scanners/base.py",
+        "extension": ".py",
+        "size_bytes": 704,
+        "modified": 1762981017.463236,
+        "sha1": "b7315442cb036d43b43e16c584e12f1c67cac452",
+        "language": "python"
+      }
+    },
+    {
+      "id": "src/scanners/__init__.py",
+      "type": "file",
+      "label": "__init__.py",
+      "properties": {
+        "path": "src/scanners/__init__.py",
+        "extension": ".py",
+        "size_bytes": 107,
+        "modified": 1762981017.463236,
+        "sha1": "4a0692907e3d136e47527e64d85a591de9630ef4",
+        "language": "python"
+      }
+    },
+    {
+      "id": "src/enumeration/collector.py",
+      "type": "file",
+      "label": "collector.py",
+      "properties": {
+        "path": "src/enumeration/collector.py",
+        "extension": ".py",
+        "size_bytes": 12436,
+        "modified": 1762981136.6670337,
+        "sha1": "49133c46261c809c3a10a0dc8314d555f31e1cea",
+        "language": "python"
+      }
+    },
+    {
+      "id": "src/enumeration/collector.py::def::write_graph:330",
+      "type": "function",
+      "label": "write_graph",
+      "properties": {
+        "defined_in": "src/enumeration/collector.py",
+        "lineno": 330,
+        "docstring": "",
+        "async": false
+      }
+    },
+    {
+      "id": "src/enumeration/collector.py::def::main:336",
+      "type": "function",
+      "label": "main",
+      "properties": {
+        "defined_in": "src/enumeration/collector.py",
+        "lineno": 336,
+        "docstring": "",
+        "async": false
+      }
+    },
+    {
+      "id": "src/enumeration/__init__.py",
+      "type": "file",
+      "label": "__init__.py",
+      "properties": {
+        "path": "src/enumeration/__init__.py",
+        "extension": ".py",
+        "size_bytes": 0,
+        "modified": 1762981084.3951085,
+        "sha1": "da39a3ee5e6b4b0d3255bfef95601890afd80709",
+        "language": "python"
+      }
+    },
+    {
+      "id": "src/visualization/rag_graph.py",
+      "type": "file",
+      "label": "rag_graph.py",
+      "properties": {
+        "path": "src/visualization/rag_graph.py",
+        "extension": ".py",
+        "size_bytes": 5328,
+        "modified": 1762981138.7750294,
+        "sha1": "a99b6a9d5b921b0ba34c1adad6473610a427da87",
+        "language": "python"
+      }
+    },
+    {
+      "id": "src/visualization/__init__.py",
+      "type": "file",
+      "label": "__init__.py",
+      "properties": {
+        "path": "src/visualization/__init__.py",
+        "extension": ".py",
+        "size_bytes": 0,
+        "modified": 1762981084.3951085,
+        "sha1": "da39a3ee5e6b4b0d3255bfef95601890afd80709",
+        "language": "python"
+      }
+    },
+    {
+      "id": "src/mcp_vanguard/schemas.py",
+      "type": "file",
+      "label": "schemas.py",
+      "properties": {
+        "path": "src/mcp_vanguard/schemas.py",
+        "extension": ".py",
+        "size_bytes": 1444,
+        "modified": 1762981017.463236,
+        "sha1": "7cb03a9f9cd8a943cbacdb3a84a9277984ee3831",
+        "language": "python"
+      }
+    },
+    {
+      "id": "src/mcp_vanguard/registry.py",
+      "type": "file",
+      "label": "registry.py",
+      "properties": {
+        "path": "src/mcp_vanguard/registry.py",
+        "extension": ".py",
+        "size_bytes": 647,
+        "modified": 1762981017.463236,
+        "sha1": "f34a193cf0f1a417b6c81433ce3f96f0bf32277b",
+        "language": "python"
+      }
+    },
+    {
+      "id": "src/mcp_vanguard/registry.py::def::register_tool:11",
+      "type": "function",
+      "label": "register_tool",
+      "properties": {
+        "defined_in": "src/mcp_vanguard/registry.py",
+        "lineno": 11,
+        "docstring": "Register a callable as a tool under ``name``.",
+        "async": false
+      }
+    },
+    {
+      "id": "src/mcp_vanguard/registry.py::def::echo_tool:22",
+      "type": "function",
+      "label": "echo_tool",
+      "properties": {
+        "defined_in": "src/mcp_vanguard/registry.py",
+        "lineno": 22,
+        "docstring": "Simple echo tool used for examples and smoke tests.",
+        "async": false
+      }
+    },
+    {
+      "id": "src/mcp_vanguard/__main__.py",
+      "type": "file",
+      "label": "__main__.py",
+      "properties": {
+        "path": "src/mcp_vanguard/__main__.py",
+        "extension": ".py",
+        "size_bytes": 2448,
+        "modified": 1762981017.463236,
+        "sha1": "486ad39cc0e78e1697343069e5a6bf460fcf9b0b",
+        "language": "python"
+      }
+    },
+    {
+      "id": "src/mcp_vanguard/__main__.py::def::_parse_parameter_arguments:12",
+      "type": "function",
+      "label": "_parse_parameter_arguments",
+      "properties": {
+        "defined_in": "src/mcp_vanguard/__main__.py",
+        "lineno": 12,
+        "docstring": "Parse ``--key value`` pairs from ``arguments`` into a dictionary.",
+        "async": false
+      }
+    },
+    {
+      "id": "src/mcp_vanguard/__main__.py::def::_coerce_value:33",
+      "type": "function",
+      "label": "_coerce_value",
+      "properties": {
+        "defined_in": "src/mcp_vanguard/__main__.py",
+        "lineno": 33,
+        "docstring": "Attempt to coerce a CLI value into JSON, falling back to ``str``.",
+        "async": false
+      }
+    },
+    {
+      "id": "src/mcp_vanguard/__main__.py::def::build_parser:42",
+      "type": "function",
+      "label": "build_parser",
+      "properties": {
+        "defined_in": "src/mcp_vanguard/__main__.py",
+        "lineno": 42,
+        "docstring": "",
+        "async": false
+      }
+    },
+    {
+      "id": "src/mcp_vanguard/__main__.py::def::main:53",
+      "type": "function",
+      "label": "main",
+      "properties": {
+        "defined_in": "src/mcp_vanguard/__main__.py",
+        "lineno": 53,
+        "docstring": "",
+        "async": false
+      }
+    },
+    {
+      "id": "src/mcp_vanguard/http.py",
+      "type": "file",
+      "label": "http.py",
+      "properties": {
+        "path": "src/mcp_vanguard/http.py",
+        "extension": ".py",
+        "size_bytes": 984,
+        "modified": 1762981017.463236,
+        "sha1": "a390b2cc5f8b22fa78ec267300d19eefa7e16da3",
+        "language": "python"
+      }
+    },
+    {
+      "id": "src/mcp_vanguard/http.py::def::_coerce_response:16",
+      "type": "function",
+      "label": "_coerce_response",
+      "properties": {
+        "defined_in": "src/mcp_vanguard/http.py",
+        "lineno": 16,
+        "docstring": "Convert a raw tool result into a response model.",
+        "async": false
+      }
+    },
+    {
+      "id": "src/mcp_vanguard/http.py::def::call_tool:24",
+      "type": "function",
+      "label": "call_tool",
+      "properties": {
+        "defined_in": "src/mcp_vanguard/http.py",
+        "lineno": 24,
+        "docstring": "Invoke a registered tool via the core runner.",
+        "async": true
+      }
+    },
+    {
+      "id": "src/mcp_vanguard/core.py",
+      "type": "file",
+      "label": "core.py",
+      "properties": {
+        "path": "src/mcp_vanguard/core.py",
+        "extension": ".py",
+        "size_bytes": 1315,
+        "modified": 1762981017.463236,
+        "sha1": "2b3c9f66ccf7780b7e6bfaad65e8a6ee86b75e86",
+        "language": "python"
+      }
+    },
+    {
+      "id": "src/mcp_vanguard/core.py::def::run_tool:20",
+      "type": "function",
+      "label": "run_tool",
+      "properties": {
+        "defined_in": "src/mcp_vanguard/core.py",
+        "lineno": 20,
+        "docstring": "Execute a tool from the registry and return a HTTP-style response.",
+        "async": false
+      }
+    },
+    {
+      "id": "src/mcp_vanguard/tools.py",
+      "type": "file",
+      "label": "tools.py",
+      "properties": {
+        "path": "src/mcp_vanguard/tools.py",
+        "extension": ".py",
+        "size_bytes": 476,
+        "modified": 1762981017.463236,
+        "sha1": "357c67d832b716af0bdfcc34391b54d277ec7a63",
+        "language": "python"
+      }
+    },
+    {
+      "id": "src/mcp_vanguard/tools.py::def::register_tool:13",
+      "type": "function",
+      "label": "register_tool",
+      "properties": {
+        "defined_in": "src/mcp_vanguard/tools.py",
+        "lineno": 13,
+        "docstring": "Placeholder registration function.",
+        "async": false
+      }
+    },
+    {
+      "id": "src/mcp_vanguard/__init__.py",
+      "type": "file",
+      "label": "__init__.py",
+      "properties": {
+        "path": "src/mcp_vanguard/__init__.py",
+        "extension": ".py",
+        "size_bytes": 177,
+        "modified": 1762981017.463236,
+        "sha1": "139a2e704fb91fb2605000b913b7d721d802ecbb",
+        "language": "python"
+      }
+    },
+    {
+      "id": "src/mcp_vanguard/tools/scan_github_repo.py",
+      "type": "file",
+      "label": "scan_github_repo.py",
+      "properties": {
+        "path": "src/mcp_vanguard/tools/scan_github_repo.py",
+        "extension": ".py",
+        "size_bytes": 1164,
+        "modified": 1762981017.463236,
+        "sha1": "4365fbb7a01f01d5446fbad6d7de1f85e3fa3aa0",
+        "language": "python"
+      }
+    },
+    {
+      "id": "src/mcp_vanguard/tools/scan_github_repo.py::def::_validate_github_url:10",
+      "type": "function",
+      "label": "_validate_github_url",
+      "properties": {
+        "defined_in": "src/mcp_vanguard/tools/scan_github_repo.py",
+        "lineno": 10,
+        "docstring": "",
+        "async": false
+      }
+    },
+    {
+      "id": "src/mcp_vanguard/tools/scan_github_repo.py::def::scan_github_repo:21",
+      "type": "function",
+      "label": "scan_github_repo",
+      "properties": {
+        "defined_in": "src/mcp_vanguard/tools/scan_github_repo.py",
+        "lineno": 21,
+        "docstring": "Return metadata describing the GitHub repository to scan.\n\nThis minimal implementation performs basic validation and returns\nnormalized data that can be consumed by higher-level scanners.",
+        "async": false
+      }
+    },
+    {
+      "id": "src/mcp_vanguard/tools/ping.py",
+      "type": "file",
+      "label": "ping.py",
+      "properties": {
+        "path": "src/mcp_vanguard/tools/ping.py",
+        "extension": ".py",
+        "size_bytes": 381,
+        "modified": 1762981017.463236,
+        "sha1": "abbde8654ad88df3b7641bc1f34fa93c736f0fd4",
+        "language": "python"
+      }
+    },
+    {
+      "id": "src/mcp_vanguard/tools/ping.py::def::ping:10",
+      "type": "function",
+      "label": "ping",
+      "properties": {
+        "defined_in": "src/mcp_vanguard/tools/ping.py",
+        "lineno": 10,
+        "docstring": "Return a pong-style payload useful for health checks.",
+        "async": false
+      }
+    },
+    {
+      "id": "src/mcp_vanguard/tools/__init__.py",
+      "type": "file",
+      "label": "__init__.py",
+      "properties": {
+        "path": "src/mcp_vanguard/tools/__init__.py",
+        "extension": ".py",
+        "size_bytes": 934,
+        "modified": 1762981017.463236,
+        "sha1": "34e45d352c47d791a9f094aac84285bf07f0d9ac",
+        "language": "python"
+      }
+    },
+    {
+      "id": "src/mcp_vanguard/tools/__init__.py::def::_iter_tool_module_names:14",
+      "type": "function",
+      "label": "_iter_tool_module_names",
+      "properties": {
+        "defined_in": "src/mcp_vanguard/tools/__init__.py",
+        "lineno": 14,
+        "docstring": "",
+        "async": false
+      }
+    },
+    {
+      "id": "src/mcp_vanguard/tools/__init__.py::def::ensure_tools_registered:25",
+      "type": "function",
+      "label": "ensure_tools_registered",
+      "properties": {
+        "defined_in": "src/mcp_vanguard/tools/__init__.py",
+        "lineno": 25,
+        "docstring": "Import every tool module exactly once so decorators execute.",
+        "async": false
+      }
+    },
+    {
+      "id": "src/llm/base.py",
+      "type": "file",
+      "label": "base.py",
+      "properties": {
+        "path": "src/llm/base.py",
+        "extension": ".py",
+        "size_bytes": 553,
+        "modified": 1762981017.463236,
+        "sha1": "b4b6c029cf94879e15c9abbf33f64a2915aab585",
+        "language": "python"
+      }
+    },
+    {
+      "id": "src/llm/__init__.py",
+      "type": "file",
+      "label": "__init__.py",
+      "properties": {
+        "path": "src/llm/__init__.py",
+        "extension": ".py",
+        "size_bytes": 81,
+        "modified": 1762981017.463236,
+        "sha1": "bcbeb2db99935c367a3696fc6b9565d428993686",
+        "language": "python"
+      }
+    },
+    {
+      "id": "src/common/config.py",
+      "type": "file",
+      "label": "config.py",
+      "properties": {
+        "path": "src/common/config.py",
+        "extension": ".py",
+        "size_bytes": 2930,
+        "modified": 1762981017.463236,
+        "sha1": "0718233be1badaae3958fef79fb980f2027d5c46",
+        "language": "python"
+      }
+    },
+    {
+      "id": "src/common/config.py::def::get_settings:92",
+      "type": "function",
+      "label": "get_settings",
+      "properties": {
+        "defined_in": "src/common/config.py",
+        "lineno": 92,
+        "docstring": "Return the cached application settings instance.",
+        "async": false
+      }
+    },
+    {
+      "id": "src/common/logging.py",
+      "type": "file",
+      "label": "logging.py",
+      "properties": {
+        "path": "src/common/logging.py",
+        "extension": ".py",
+        "size_bytes": 798,
+        "modified": 1762981017.463236,
+        "sha1": "aea3a72211438fca66e33971515dd195b45120ac",
+        "language": "python"
+      }
+    },
+    {
+      "id": "src/common/logging.py::def::configure_logging:10",
+      "type": "function",
+      "label": "configure_logging",
+      "properties": {
+        "defined_in": "src/common/logging.py",
+        "lineno": 10,
+        "docstring": "Configure the root logger if it has not been configured yet.",
+        "async": false
+      }
+    },
+    {
+      "id": "src/common/logging.py::def::get_logger:24",
+      "type": "function",
+      "label": "get_logger",
+      "properties": {
+        "defined_in": "src/common/logging.py",
+        "lineno": 24,
+        "docstring": "Return a module-level logger configured with the shared settings.",
+        "async": false
+      }
+    },
+    {
+      "id": "src/common/__init__.py",
+      "type": "file",
+      "label": "__init__.py",
+      "properties": {
+        "path": "src/common/__init__.py",
+        "extension": ".py",
+        "size_bytes": 378,
+        "modified": 1762981017.463236,
+        "sha1": "bdc5b5bafbcdcd37d89e5b1b28b5c8affbf87ae3",
+        "language": "python"
+      }
+    },
+    {
+      "id": "src/pydantic/__init__.py",
+      "type": "file",
+      "label": "__init__.py",
+      "properties": {
+        "path": "src/pydantic/__init__.py",
+        "extension": ".py",
+        "size_bytes": 3633,
+        "modified": 1762981017.463236,
+        "sha1": "28af04181d5197967ec544ff9ff1caaf1c2f6ad0",
+        "language": "python"
+      }
+    },
+    {
+      "id": "src/pydantic/__init__.py::def::Field:22",
+      "type": "function",
+      "label": "Field",
+      "properties": {
+        "defined_in": "src/pydantic/__init__.py",
+        "lineno": 22,
+        "docstring": "Return metadata describing a model field.",
+        "async": false
+      }
+    }
+  ],
+  "edges": [
+    {
+      "source": "semgrep_runner.py",
+      "target": "semgrep_runner.py::def::load_config:66",
+      "type": "contains",
+      "properties": {}
+    },
+    {
+      "source": "semgrep_runner.py",
+      "target": "semgrep_runner.py::def::build_command:93",
+      "type": "contains",
+      "properties": {}
+    },
+    {
+      "source": "semgrep_runner.py",
+      "target": "semgrep_runner.py::def::execute_semgrep:103",
+      "type": "contains",
+      "properties": {}
+    },
+    {
+      "source": "semgrep_runner.py",
+      "target": "semgrep_runner.py::def::interpret_result:108",
+      "type": "contains",
+      "properties": {}
+    },
+    {
+      "source": "semgrep_runner.py",
+      "target": "semgrep_runner.py::def::write_output:152",
+      "type": "contains",
+      "properties": {}
+    },
+    {
+      "source": "semgrep_runner.py",
+      "target": "semgrep_runner.py::def::parse_args:162",
+      "type": "contains",
+      "properties": {}
+    },
+    {
+      "source": "semgrep_runner.py",
+      "target": "semgrep_runner.py::def::main:184",
+      "type": "contains",
+      "properties": {}
+    },
+    {
+      "source": "semgrep_runner.py::def::parse_args:162",
+      "target": "semgrep_runner.py::def::parse_args:162",
+      "type": "calls",
+      "properties": {
+        "call": "parse_args"
+      }
+    },
+    {
+      "source": "semgrep_runner.py::def::main:184",
+      "target": "semgrep_runner.py::def::parse_args:162",
+      "type": "calls",
+      "properties": {
+        "call": "parse_args"
+      }
+    },
+    {
+      "source": "semgrep_runner.py::def::main:184",
+      "target": "semgrep_runner.py::def::write_output:152",
+      "type": "calls",
+      "properties": {
+        "call": "write_output"
+      }
+    },
+    {
+      "source": "semgrep_runner.py::def::main:184",
+      "target": "semgrep_runner.py::def::load_config:66",
+      "type": "calls",
+      "properties": {
+        "call": "load_config"
+      }
+    },
+    {
+      "source": "semgrep_runner.py::def::main:184",
+      "target": "semgrep_runner.py::def::build_command:93",
+      "type": "calls",
+      "properties": {
+        "call": "build_command"
+      }
+    },
+    {
+      "source": "semgrep_runner.py::def::main:184",
+      "target": "semgrep_runner.py::def::execute_semgrep:103",
+      "type": "calls",
+      "properties": {
+        "call": "execute_semgrep"
+      }
+    },
+    {
+      "source": "semgrep_runner.py::def::main:184",
+      "target": "semgrep_runner.py::def::interpret_result:108",
+      "type": "calls",
+      "properties": {
+        "call": "interpret_result"
+      }
+    },
+    {
+      "source": "tests/test_cli.py",
+      "target": "tests/test_cli.py::def::run_cli:14",
+      "type": "contains",
+      "properties": {}
+    },
+    {
+      "source": "tests/test_cli.py",
+      "target": "tests/test_cli.py::def::test_run_tool_echo:28",
+      "type": "contains",
+      "properties": {}
+    },
+    {
+      "source": "tests/test_cli.py",
+      "target": "tests/test_cli.py::def::test_run_tool_unknown:37",
+      "type": "contains",
+      "properties": {}
+    },
+    {
+      "source": "tests/test_cli.py::def::test_run_tool_echo:28",
+      "target": "tests/test_cli.py::def::run_cli:14",
+      "type": "calls",
+      "properties": {
+        "call": "run_cli"
+      }
+    },
+    {
+      "source": "tests/test_cli.py::def::test_run_tool_unknown:37",
+      "target": "tests/test_cli.py::def::run_cli:14",
+      "type": "calls",
+      "properties": {
+        "call": "run_cli"
+      }
+    },
+    {
+      "source": "tests/test_http.py",
+      "target": "tests/test_http.py::def::reload_http_module:20",
+      "type": "contains",
+      "properties": {}
+    },
+    {
+      "source": "tests/test_http.py",
+      "target": "tests/test_http.py::def::test_tools_module_is_imported_on_startup:26",
+      "type": "contains",
+      "properties": {}
+    },
+    {
+      "source": "tests/test_http.py",
+      "target": "tests/test_http.py::def::test_call_tool_delegates_to_core:34",
+      "type": "contains",
+      "properties": {}
+    },
+    {
+      "source": "tests/test_http.py",
+      "target": "tests/test_http.py::def::test_call_tool_uses_default_arguments:62",
+      "type": "contains",
+      "properties": {}
+    },
+    {
+      "source": "tests/test_http.py::def::test_tools_module_is_imported_on_startup:26",
+      "target": "tests/test_http.py::def::reload_http_module:20",
+      "type": "calls",
+      "properties": {
+        "call": "reload_http_module"
+      }
+    },
+    {
+      "source": "tests/test_http.py::def::test_call_tool_delegates_to_core:34",
+      "target": "tests/test_http.py::def::reload_http_module:20",
+      "type": "calls",
+      "properties": {
+        "call": "reload_http_module"
+      }
+    },
+    {
+      "source": "tests/test_http.py::def::test_call_tool_uses_default_arguments:62",
+      "target": "tests/test_http.py::def::reload_http_module:20",
+      "type": "calls",
+      "properties": {
+        "call": "reload_http_module"
+      }
+    },
+    {
+      "source": "tests/test_remediation.py",
+      "target": "tests/test_remediation.py::def::make_context:32",
+      "type": "contains",
+      "properties": {}
+    },
+    {
+      "source": "tests/test_remediation.py",
+      "target": "tests/test_remediation.py::def::test_suggest_persists_proposals:41",
+      "type": "contains",
+      "properties": {}
+    },
+    {
+      "source": "tests/test_remediation.py",
+      "target": "tests/test_remediation.py::def::test_attach_validation_results_updates_disk:55",
+      "type": "contains",
+      "properties": {}
+    },
+    {
+      "source": "tests/test_remediation.py::def::test_suggest_persists_proposals:41",
+      "target": "tests/test_remediation.py::def::make_context:32",
+      "type": "calls",
+      "properties": {
+        "call": "make_context"
+      }
+    },
+    {
+      "source": "tests/test_remediation.py::def::test_attach_validation_results_updates_disk:55",
+      "target": "tests/test_remediation.py::def::make_context:32",
+      "type": "calls",
+      "properties": {
+        "call": "make_context"
+      }
+    },
+    {
+      "source": "src/mcp_scanner/dspy_programs.py",
+      "target": "src/mcp_scanner/dspy_programs.py::def::_format_dict:17",
+      "type": "contains",
+      "properties": {}
+    },
+    {
+      "source": "src/mcp_scanner/dspy_programs.py",
+      "target": "src/mcp_scanner/dspy_programs.py::def::_parse_json_output:46",
+      "type": "contains",
+      "properties": {}
+    },
+    {
+      "source": "src/mcp_scanner/dspy_programs.py",
+      "target": "src/mcp_scanner/dspy_programs.py::def::normalize_patches:143",
+      "type": "contains",
+      "properties": {}
+    },
+    {
+      "source": "src/mcp_scanner/dspy_programs.py",
+      "target": "src/mcp_scanner/models.py",
+      "type": "imports",
+      "properties": {
+        "import": "models:PatchProposal"
+      }
+    },
+    {
+      "source": "src/mcp_scanner/dspy_programs.py",
+      "target": "src/mcp_scanner/models.py",
+      "type": "imports",
+      "properties": {
+        "import": "models:VulnerabilityContext"
+      }
+    },
+    {
+      "source": "src/mcp_scanner/dspy_programs.py::def::_format_dict:17",
+      "target": "src/mcp_scanner/dspy_programs.py::def::_format_dict:17",
+      "type": "calls",
+      "properties": {
+        "call": "_format_dict"
+      }
+    },
+    {
+      "source": "src/mcp_scanner/dspy_programs.py::def::_format_dict:17",
+      "target": "src/mcp_scanner/dspy_programs.py::def::_format_dict:17",
+      "type": "calls",
+      "properties": {
+        "call": "_format_dict"
+      }
+    },
+    {
+      "source": "src/mcp_scanner/remediation.py",
+      "target": "src/mcp_scanner/dspy_programs.py",
+      "type": "imports",
+      "properties": {
+        "import": "dspy_programs:DSPyResponse"
+      }
+    },
+    {
+      "source": "src/mcp_scanner/remediation.py",
+      "target": "src/mcp_scanner/dspy_programs.py",
+      "type": "imports",
+      "properties": {
+        "import": "dspy_programs:PatchSuggestionProgram"
+      }
+    },
+    {
+      "source": "src/mcp_scanner/remediation.py",
+      "target": "src/mcp_scanner/dspy_programs.py",
+      "type": "imports",
+      "properties": {
+        "import": "dspy_programs:normalize_patches"
+      }
+    },
+    {
+      "source": "src/mcp_scanner/remediation.py",
+      "target": "src/mcp_scanner/models.py",
+      "type": "imports",
+      "properties": {
+        "import": "models:PatchProposal"
+      }
+    },
+    {
+      "source": "src/mcp_scanner/remediation.py",
+      "target": "src/mcp_scanner/models.py",
+      "type": "imports",
+      "properties": {
+        "import": "models:ValidationResult"
+      }
+    },
+    {
+      "source": "src/mcp_scanner/remediation.py",
+      "target": "src/mcp_scanner/models.py",
+      "type": "imports",
+      "properties": {
+        "import": "models:VulnerabilityContext"
+      }
+    },
+    {
+      "source": "src/mcp_scanner/remediation.py",
+      "target": "src/mcp_scanner/models.py",
+      "type": "imports",
+      "properties": {
+        "import": "models:ensure_directory"
+      }
+    },
+    {
+      "source": "src/mcp_scanner/models.py",
+      "target": "src/mcp_scanner/models.py::def::ensure_directory:91",
+      "type": "contains",
+      "properties": {}
+    },
+    {
+      "source": "src/mcp_scanner/validation.py",
+      "target": "src/mcp_scanner/models.py",
+      "type": "imports",
+      "properties": {
+        "import": "models:ValidationResult"
+      }
+    },
+    {
+      "source": "src/fastapi/testclient.py",
+      "target": "src/fastapi/app.py",
+      "type": "imports",
+      "properties": {
+        "import": "app:FastAPI"
+      }
+    },
+    {
+      "source": "src/fastapi/testclient.py",
+      "target": "src/fastapi/app.py",
+      "type": "imports",
+      "properties": {
+        "import": "app:Response"
+      }
+    },
+    {
+      "source": "src/fastapi/testclient.py",
+      "target": "src/fastapi/app.py",
+      "type": "imports",
+      "properties": {
+        "import": "app:_build_payload"
+      }
+    },
+    {
+      "source": "src/fastapi/testclient.py",
+      "target": "src/fastapi/app.py",
+      "type": "imports",
+      "properties": {
+        "import": "app:_ensure_awaitable"
+      }
+    },
+    {
+      "source": "src/fastapi/testclient.py",
+      "target": "src/fastapi/app.py",
+      "type": "imports",
+      "properties": {
+        "import": "app:_render_response"
+      }
+    },
+    {
+      "source": "src/fastapi/app.py",
+      "target": "src/fastapi/app.py::def::_ensure_awaitable:39",
+      "type": "contains",
+      "properties": {}
+    },
+    {
+      "source": "src/fastapi/app.py",
+      "target": "src/fastapi/app.py::def::_evaluate_annotation:45",
+      "type": "contains",
+      "properties": {}
+    },
+    {
+      "source": "src/fastapi/app.py",
+      "target": "src/fastapi/app.py::def::_build_payload:51",
+      "type": "contains",
+      "properties": {}
+    },
+    {
+      "source": "src/fastapi/app.py",
+      "target": "src/fastapi/app.py::def::_render_response:67",
+      "type": "contains",
+      "properties": {}
+    },
+    {
+      "source": "src/fastapi/app.py::def::_build_payload:51",
+      "target": "src/fastapi/app.py::def::_evaluate_annotation:45",
+      "type": "calls",
+      "properties": {
+        "call": "_evaluate_annotation"
+      }
+    },
+    {
+      "source": "src/fastapi/app.py::def::_render_response:67",
+      "target": "src/fastapi/app.py::def::_evaluate_annotation:45",
+      "type": "calls",
+      "properties": {
+        "call": "_evaluate_annotation"
+      }
+    },
+    {
+      "source": "src/graph/enrichers.py",
+      "target": "src/graph/enrichers.py::def::correlate_semgrep_findings:191",
+      "type": "contains",
+      "properties": {}
+    },
+    {
+      "source": "src/enumeration/collector.py",
+      "target": "src/enumeration/collector.py::def::write_graph:330",
+      "type": "contains",
+      "properties": {}
+    },
+    {
+      "source": "src/enumeration/collector.py",
+      "target": "src/enumeration/collector.py::def::main:336",
+      "type": "contains",
+      "properties": {}
+    },
+    {
+      "source": "src/enumeration/collector.py::def::main:336",
+      "target": "src/enumeration/collector.py::def::write_graph:330",
+      "type": "calls",
+      "properties": {
+        "call": "write_graph"
+      }
+    },
+    {
+      "source": "src/mcp_vanguard/registry.py",
+      "target": "src/mcp_vanguard/registry.py::def::register_tool:11",
+      "type": "contains",
+      "properties": {}
+    },
+    {
+      "source": "src/mcp_vanguard/registry.py",
+      "target": "src/mcp_vanguard/registry.py::def::echo_tool:22",
+      "type": "contains",
+      "properties": {}
+    },
+    {
+      "source": "src/mcp_vanguard/registry.py::def::echo_tool:22",
+      "target": "src/mcp_vanguard/registry.py::def::register_tool:11",
+      "type": "calls",
+      "properties": {
+        "call": "register_tool"
+      }
+    },
+    {
+      "source": "src/mcp_vanguard/__main__.py",
+      "target": "src/mcp_vanguard/__main__.py::def::_parse_parameter_arguments:12",
+      "type": "contains",
+      "properties": {}
+    },
+    {
+      "source": "src/mcp_vanguard/__main__.py",
+      "target": "src/mcp_vanguard/__main__.py::def::_coerce_value:33",
+      "type": "contains",
+      "properties": {}
+    },
+    {
+      "source": "src/mcp_vanguard/__main__.py",
+      "target": "src/mcp_vanguard/__main__.py::def::build_parser:42",
+      "type": "contains",
+      "properties": {}
+    },
+    {
+      "source": "src/mcp_vanguard/__main__.py",
+      "target": "src/mcp_vanguard/__main__.py::def::main:53",
+      "type": "contains",
+      "properties": {}
+    },
+    {
+      "source": "src/mcp_vanguard/__main__.py",
+      "target": "src/mcp_vanguard/__init__.py",
+      "type": "imports",
+      "properties": {
+        "import": "core"
+      }
+    },
+    {
+      "source": "src/mcp_vanguard/__main__.py::def::_parse_parameter_arguments:12",
+      "target": "src/mcp_vanguard/__main__.py::def::_coerce_value:33",
+      "type": "calls",
+      "properties": {
+        "call": "_coerce_value"
+      }
+    },
+    {
+      "source": "src/mcp_vanguard/__main__.py::def::main:53",
+      "target": "src/mcp_vanguard/__main__.py::def::build_parser:42",
+      "type": "calls",
+      "properties": {
+        "call": "build_parser"
+      }
+    },
+    {
+      "source": "src/mcp_vanguard/__main__.py::def::main:53",
+      "target": "src/mcp_vanguard/__main__.py::def::_parse_parameter_arguments:12",
+      "type": "calls",
+      "properties": {
+        "call": "_parse_parameter_arguments"
+      }
+    },
+    {
+      "source": "src/mcp_vanguard/http.py",
+      "target": "src/mcp_vanguard/http.py::def::_coerce_response:16",
+      "type": "contains",
+      "properties": {}
+    },
+    {
+      "source": "src/mcp_vanguard/http.py",
+      "target": "src/mcp_vanguard/http.py::def::call_tool:24",
+      "type": "contains",
+      "properties": {}
+    },
+    {
+      "source": "src/mcp_vanguard/http.py",
+      "target": "src/mcp_vanguard/__init__.py",
+      "type": "imports",
+      "properties": {
+        "import": "core"
+      }
+    },
+    {
+      "source": "src/mcp_vanguard/http.py",
+      "target": "src/mcp_vanguard/__init__.py",
+      "type": "imports",
+      "properties": {
+        "import": "tools"
+      }
+    },
+    {
+      "source": "src/mcp_vanguard/http.py",
+      "target": "src/mcp_vanguard/schemas.py",
+      "type": "imports",
+      "properties": {
+        "import": "schemas:ToolCallRequest"
+      }
+    },
+    {
+      "source": "src/mcp_vanguard/http.py",
+      "target": "src/mcp_vanguard/schemas.py",
+      "type": "imports",
+      "properties": {
+        "import": "schemas:ToolCallResponse"
+      }
+    },
+    {
+      "source": "src/mcp_vanguard/http.py::def::call_tool:24",
+      "target": "src/mcp_vanguard/http.py::def::_coerce_response:16",
+      "type": "calls",
+      "properties": {
+        "call": "_coerce_response"
+      }
+    },
+    {
+      "source": "src/mcp_vanguard/core.py",
+      "target": "src/mcp_vanguard/core.py::def::run_tool:20",
+      "type": "contains",
+      "properties": {}
+    },
+    {
+      "source": "src/mcp_vanguard/core.py",
+      "target": "src/mcp_vanguard/registry.py",
+      "type": "imports",
+      "properties": {
+        "import": "registry:TOOL_REGISTRY"
+      }
+    },
+    {
+      "source": "src/mcp_vanguard/tools.py",
+      "target": "src/mcp_vanguard/tools.py::def::register_tool:13",
+      "type": "contains",
+      "properties": {}
+    },
+    {
+      "source": "src/mcp_vanguard/tools/scan_github_repo.py",
+      "target": "src/mcp_vanguard/tools/scan_github_repo.py::def::_validate_github_url:10",
+      "type": "contains",
+      "properties": {}
+    },
+    {
+      "source": "src/mcp_vanguard/tools/scan_github_repo.py",
+      "target": "src/mcp_vanguard/tools/scan_github_repo.py::def::scan_github_repo:21",
+      "type": "contains",
+      "properties": {}
+    },
+    {
+      "source": "src/mcp_vanguard/tools/scan_github_repo.py",
+      "target": "src/mcp_vanguard/tools/__init__.py",
+      "type": "imports",
+      "properties": {
+        "import": "register_tool"
+      }
+    },
+    {
+      "source": "src/mcp_vanguard/tools/scan_github_repo.py::def::scan_github_repo:21",
+      "target": "src/mcp_vanguard/tools/scan_github_repo.py::def::_validate_github_url:10",
+      "type": "calls",
+      "properties": {
+        "call": "_validate_github_url"
+      }
+    },
+    {
+      "source": "src/mcp_vanguard/tools/ping.py",
+      "target": "src/mcp_vanguard/tools/ping.py::def::ping:10",
+      "type": "contains",
+      "properties": {}
+    },
+    {
+      "source": "src/mcp_vanguard/tools/ping.py",
+      "target": "src/mcp_vanguard/tools/__init__.py",
+      "type": "imports",
+      "properties": {
+        "import": "register_tool"
+      }
+    },
+    {
+      "source": "src/mcp_vanguard/tools/__init__.py",
+      "target": "src/mcp_vanguard/tools/__init__.py::def::_iter_tool_module_names:14",
+      "type": "contains",
+      "properties": {}
+    },
+    {
+      "source": "src/mcp_vanguard/tools/__init__.py",
+      "target": "src/mcp_vanguard/tools/__init__.py::def::ensure_tools_registered:25",
+      "type": "contains",
+      "properties": {}
+    },
+    {
+      "source": "src/mcp_vanguard/tools/__init__.py::def::ensure_tools_registered:25",
+      "target": "src/mcp_vanguard/tools/__init__.py::def::_iter_tool_module_names:14",
+      "type": "calls",
+      "properties": {
+        "call": "_iter_tool_module_names"
+      }
+    },
+    {
+      "source": "src/common/config.py",
+      "target": "src/common/config.py::def::get_settings:92",
+      "type": "contains",
+      "properties": {}
+    },
+    {
+      "source": "src/common/logging.py",
+      "target": "src/common/logging.py::def::configure_logging:10",
+      "type": "contains",
+      "properties": {}
+    },
+    {
+      "source": "src/common/logging.py",
+      "target": "src/common/logging.py::def::get_logger:24",
+      "type": "contains",
+      "properties": {}
+    },
+    {
+      "source": "src/common/logging.py::def::get_logger:24",
+      "target": "src/common/logging.py::def::configure_logging:10",
+      "type": "calls",
+      "properties": {
+        "call": "configure_logging"
+      }
+    },
+    {
+      "source": "src/pydantic/__init__.py",
+      "target": "src/pydantic/__init__.py::def::Field:22",
+      "type": "contains",
+      "properties": {}
+    }
+  ]
+}
