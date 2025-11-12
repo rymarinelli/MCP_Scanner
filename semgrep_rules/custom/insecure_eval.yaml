@@ -1,0 +1,20 @@
+rules:
+  - id: python-insecure-eval
+    message: Avoid using eval() or exec() on untrusted input. Prefer safer parsing utilities.
+    metadata:
+      category: security
+      cwe: CWE-94
+      owasp: A03:2021-Injection
+    languages: [python]
+    severity: ERROR
+    pattern-either:
+      - patterns:
+          - pattern: eval($EXPR)
+          - pattern-inside: |
+              def $FUNC(...):
+                  ...
+      - patterns:
+          - pattern: exec($EXPR)
+          - pattern-inside: |
+              def $FUNC(...):
+                  ...
