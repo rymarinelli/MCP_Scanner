@@ -1,0 +1,51 @@
+"""Integration-style tests for the standalone HTTP server."""  
+
+from __future__ import annotations
+
+import json
+import threading
+import time
+from http.client import HTTPConnection
+from pathlib import Path
+import sys
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+
+def test_scan_endpoint(monkeypatch):
+    from service import http_server
+
+    def fake_handler(*, repo_url: str, branch: str | None = None):  # type: ignore[no-redef]
+        return {
+            "repository": {"url": repo_url, "branch": branch},
+            "semgrep": {"status": "ok"},
+            "remediation": {"proposals": [], "summary_markdown": ""},
+        }
+
+    original_handler = http_server.SCAN_HANDLER
+    http_server.SCAN_HANDLER = fake_handler
+
+    server = http_server.ThreadingHTTPServer(("127.0.0.1", 0), http_server.MCPRequestHandler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    time.sleep(0.1)
+
+    try:
+        host, port = server.server_address
+        conn = HTTPConnection(host, port)
+        payload = json.dumps({"repo_url": "https://example.com/repo.git"})
+        conn.request("POST", "/scan", body=payload, headers={"Content-Type": "application/json"})
+        response = conn.getresponse()
+        body = response.read()
+        data = json.loads(body)
+
+        assert response.status == 200
+        assert data["status"] == "success"
+        assert data["data"]["repository"]["url"] == "https://example.com/repo.git"
+    finally:
+        http_server.SCAN_HANDLER = original_handler
+        server.shutdown()
+        thread.join(timeout=1)

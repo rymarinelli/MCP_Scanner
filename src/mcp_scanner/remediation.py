@@ -7,6 +7,32 @@ from pathlib import Path
 from typing import Iterable, List, Sequence
 
 from .dspy_programs import DSPyResponse, PatchSuggestionProgram, normalize_patches
+
+
+def _default_patch_program() -> PatchSuggestionProgram:
+    """Select the default patch suggestion program based on configuration."""
+
+    import os
+
+    provider = os.getenv("MCP_LLM__PROVIDER", "").strip().lower()
+    model_name = os.getenv("MCP_LLM__MODEL", "01-ai/Yi-Coder-9B-Chat")
+
+    try:
+        from common.config import get_settings
+    except Exception:  # pragma: no cover - optional dependency fallback
+        settings_provider = provider
+        settings_model = model_name
+    else:
+        settings = get_settings()
+        settings_provider = settings.llm.provider.lower()
+        settings_model = settings.llm.model
+
+    if settings_provider == "huggingface":
+        from remediation.huggingface_program import HuggingFacePatchSuggestionProgram
+
+        return HuggingFacePatchSuggestionProgram(model_name=settings_model)
+
+    return PatchSuggestionProgram()
 from .models import PatchProposal, ValidationResult, VulnerabilityContext, ensure_directory
 
 
@@ -19,7 +45,7 @@ class RemediationSuggester:
         program: PatchSuggestionProgram | None = None,
         output_dir: Path | str = Path("reports/remediations"),
     ) -> None:
-        self.program = program or PatchSuggestionProgram()
+        self.program = program or _default_patch_program()
         self.output_dir = Path(output_dir)
         ensure_directory(self.output_dir)
 
