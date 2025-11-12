@@ -1,0 +1,30 @@
+rules:
+  - id: llm.prompt-injection.unescaped-user-input
+    message: >-
+      Untrusted user input is directly appended to an LLM prompt. Sanitise or
+      encode user-controlled content before including it in system prompts to
+      reduce prompt-injection risk.
+    severity: WARNING
+    languages: [python]
+    metadata:
+      category: prompt_injection
+      cwe: "CWE-20"
+      references:
+        - https://owasp.org/www-project-top-10-for-large-language-model-applications/
+    pattern-either:
+      - patterns:
+          - pattern: $PROMPT = $LEFT + $USER_INPUT
+          - metavariable-regex:
+              metavariable: $PROMPT
+              regex: "(?i).*prompt.*"
+          - metavariable-regex:
+              metavariable: $USER_INPUT
+              regex: "(?i).*(input|message|payload|instruction|query).*"
+      - patterns:
+          - pattern: $PROMPT += $USER_INPUT
+          - metavariable-regex:
+              metavariable: $PROMPT
+              regex: "(?i).*prompt.*"
+          - metavariable-regex:
+              metavariable: $USER_INPUT
+              regex: "(?i).*(input|message|payload|instruction|query).*"

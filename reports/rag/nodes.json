@@ -1,0 +1,34 @@
+[
+  {
+    "id": "rag-node-prompt-builder",
+    "type": "prompt_surface",
+    "file_path": "src/mcp_scanner/llm_risk_examples.py",
+    "symbol": "build_prompt",
+    "risk_tags": ["prompt_injection"],
+    "description": "User input is directly appended to the system prompt without any neutralisation."
+  },
+  {
+    "id": "rag-node-tool-exec",
+    "type": "tool_execution",
+    "file_path": "src/mcp_scanner/llm_risk_examples.py",
+    "symbol": "execute_tool_response",
+    "risk_tags": ["unsafe_tool_execution"],
+    "description": "LLM output is executed in a shell without validation."
+  },
+  {
+    "id": "rag-node-model-http",
+    "type": "model_invoke",
+    "file_path": "src/mcp_scanner/llm_risk_examples.py",
+    "symbol": "invoke_insecure_model",
+    "risk_tags": ["insecure_model_invocation"],
+    "description": "The model endpoint is invoked over HTTP with TLS checks disabled."
+  },
+  {
+    "id": "rag-node-os-system",
+    "type": "tool_execution",
+    "file_path": "src/mcp_scanner/llm_risk_examples.py",
+    "symbol": "dispatch_with_os_system",
+    "risk_tags": ["unsafe_tool_execution"],
+    "description": "LLM provided script is passed to os.system."
+  }
+]
