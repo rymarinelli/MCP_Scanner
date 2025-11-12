@@ -1,0 +1,10 @@
+[project]
+name = "mcp-scanner"
+version = "0.1.0"
+description = "DSPy-powered remediation suggestion tools"
+requires-python = ">=3.11"
+authors = [{ name = "MCP Scanner" }]
+readme = "README.md"
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
