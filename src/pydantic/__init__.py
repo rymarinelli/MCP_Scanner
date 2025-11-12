@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
-__all__ = ["BaseModel", "Field", "RootModel"]
+__all__ = ["BaseModel", "Field", "RootModel", "field_validator"]
 
 
 class _Missing:
@@ -22,6 +22,15 @@ class FieldInfo:
 def Field(*, default: Any = MISSING, default_factory: Optional[Any] = None) -> FieldInfo:
     """Return metadata describing a model field."""
     return FieldInfo(default=default, default_factory=default_factory)
+
+
+def field_validator(*field_names: str, mode: str | None = None):
+    """Simplified decorator mirroring pydantic.field_validator semantics."""
+
+    def decorator(func):
+        return func
+
+    return decorator
 
 
 class BaseModel:

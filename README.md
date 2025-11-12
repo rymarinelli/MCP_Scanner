@@ -61,6 +61,24 @@ print(settings.llm.model)
 The loader reads from `.env` by default and falls back to environment
 variables.
 
+## Using the bundled Hugging Face coding model
+
+The remediation pipeline can run entirely on CPU by enabling the local
+Hugging Face integration. Set the following environment variables to make the
+service load the `01-ai/Yi-Coder-9B-Chat` model (or another compatible coding
+model) via the Transformers library:
+
+```bash
+export MCP_LLM__PROVIDER=huggingface
+export MCP_LLM__MODEL=01-ai/Yi-Coder-9B-Chat
+```
+
+When these settings are active, the remediation suggester streams prompts to
+the locally hosted model instead of relying on a remote API. You can substitute
+`MCP_LLM__MODEL` for a smaller CPU-friendly model (for example,
+`deepseek-ai/deepseek-coder-1.3b-instruct`) if memory is constrained. The first
+run will download the model weights to the local Hugging Face cache.
+
 ## Running the HTTP service via Docker
 
 The repository now includes a lightweight HTTP service that exposes the
