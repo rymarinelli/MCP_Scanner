@@ -136,3 +136,13 @@ def test_perform_scan_happy_path(monkeypatch: pytest.MonkeyPatch) -> None:
     assert result["repository"]["url"] == "https://example.com/demo.git"
     assert result["remediation"]["proposals"] == []
 
+
+def test_perform_scan_rejects_option_like_repo_url(monkeypatch: pytest.MonkeyPatch) -> None:
+    with pytest.raises(ValueError, match="repo_url must not start with '-'"):
+        perform_scan(repo_url="--upload-pack=/tmp/x", branch=None)
+
+
+def test_perform_scan_rejects_option_like_branch(monkeypatch: pytest.MonkeyPatch) -> None:
+    with pytest.raises(ValueError, match="branch must not start with '-'"):
+        perform_scan(repo_url="https://example.com/demo.git", branch="-bad")
+

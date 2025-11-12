@@ -36,8 +36,26 @@ def _run_subprocess(command: List[str], *, cwd: Optional[Path] = None) -> subpro
     )
 
 
+def _validate_repo_inputs(repo_url: str, branch: str | None) -> None:
+    """Validate repository parameters before invoking git."""
+
+    if not isinstance(repo_url, str) or not repo_url.strip():
+        raise ValueError("repo_url is required")
+
+    if repo_url.lstrip().startswith("-"):
+        raise ValueError("repo_url must not start with '-' characters")
+
+    if branch is not None:
+        if not isinstance(branch, str) or not branch.strip():
+            raise ValueError("branch must be a non-empty string when provided")
+        if branch.lstrip().startswith("-"):
+            raise ValueError("branch must not start with '-' characters")
+
+
 def clone_repository(repo_url: str, branch: str | None, workspace: Path) -> Path:
     """Clone the requested repository into ``workspace`` and return the path."""
+
+    _validate_repo_inputs(repo_url, branch)
 
     repo_dir = workspace / "repository"
     command = ["git", "clone", "--depth", "1"]
@@ -100,8 +118,7 @@ def generate_remediations(semgrep_output: RunnerOutput, workspace: Path) -> Dict
 def perform_scan(*, repo_url: str, branch: str | None = None) -> Dict[str, object]:
     """Execute the full scan and remediation workflow for a repository."""
 
-    if not repo_url:
-        raise ValueError("repo_url is required")
+    _validate_repo_inputs(repo_url, branch)
 
     with tempfile.TemporaryDirectory(prefix="mcp-scan-") as tmpdir:
         workspace = Path(tmpdir)
