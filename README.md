@@ -1,67 +1,62 @@
-# MCP Vanguard
+# MCP Scanner
 
-A lightweight tool runner that exposes a small registry of utilities both over HTTP
-and via a Python command line interface. This repository contains the source code
-for the command line entry point and helper utilities that back the MCP Vanguard
-service.
+Foundational scaffolding for the MCP Scanner project. The repository currently
+contains shared configuration, logging helpers, and abstract interfaces for
+graph, LLM, and scanning components.
 
-## Command line interface
+## Prerequisites
 
-The CLI mirrors the JSON responses returned by the HTTP service. Any successful
-invocation prints a JSON document with `status` set to `"success"` while errors
-produce a JSON document with `status` set to `"error"` and a non-zero exit code.
+- Python 3.10+
+- `pip`
 
-Run the CLI with Python's module runner:
+## Getting started
 
-```bash
-python -m mcp_vanguard run-tool <tool-name> [--key value ...]
+1. **Create a virtual environment**
+
+   ```bash
+   python -m venv .venv
+   source .venv/bin/activate  # On Windows use: .venv\\Scripts\\activate
+   ```
+
+2. **Install the project in editable mode**
+
+   ```bash
+   pip install --upgrade pip
+   pip install -e .[dev]
+   ```
+
+3. **Provide configuration (optional)**
+
+   Copy `.env.example` to `.env` and adjust any values as needed.
+
+   ```bash
+   cp .env.example .env
+   ```
+
+   Environment variables are prefixed with `MCP_` and can be nested using
+   double underscores. For example, `MCP_LLM__API_KEY` sets the LLM provider
+   API key.
+
+## Project layout
+
+```text
+src/
+├── common/        # Shared helpers (config, logging, etc.)
+├── graph/         # Graph provider abstractions
+├── llm/           # LLM provider abstractions
+└── scanners/      # Repository scanner interfaces
 ```
 
-Parameters are supplied as `--key value` pairs. Each value is decoded as JSON when
-possible, allowing you to pass primitive types such as numbers, booleans, or
-simple objects. Values that are not valid JSON are forwarded as strings.
+## Loading configuration
 
-### Examples
-
-Execute the built-in `echo` tool:
-
-```bash
-python -m mcp_vanguard run-tool echo --message "Hello" --count 3
-```
-
-The CLI prints a JSON response identical to the HTTP API:
-
-```json
-{"status": "success", "tool": "echo", "result": {"received": {"message": "Hello", "count": 3}}}
-```
-
-Error responses are surfaced the same way:
-
-```bash
-python -m mcp_vanguard run-tool unknown-tool
-```
-
-```json
-{"status": "error", "error": {"type": "ToolNotFound", "message": "Unknown tool: unknown-tool"}}
-```
-
-## Adding new tools
-
-Tools are registered in `mcp_vanguard.registry`. Use the `@register_tool`
-decorator to expose new functionality. Each tool receives keyword arguments based
-on the CLI/HTTP payload and should return any JSON-serialisable object.
+Pydantic settings are used to centralize runtime configuration:
 
 ```python
-from mcp_vanguard.registry import register_tool
+from common.config import get_settings
 
-
-@register_tool("reverse")
-def reverse_tool(text: str) -> dict[str, str]:
-    return {"text": text[::-1]}
+settings = get_settings()
+print(settings.llm.model)
 ```
 
-Once registered, the tool becomes available to both the HTTP service and the CLI:
-
-```bash
-python -m mcp_vanguard run-tool reverse --text "Hello"
-```
+The loader reads from `.env` by default and falls back to environment
+variables.

@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=67", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mcp-scanner"
+version = "0.1.0"
+description = "Foundational scaffolding for the MCP Scanner project."
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [
+  { name = "MCP Scanner Maintainers" }
+]
+license = { text = "MIT" }
+dependencies = [
+  "pydantic>=2.5",
+  "pydantic-settings>=2.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=7.4",
+  "mypy>=1.6",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
