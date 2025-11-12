@@ -1,0 +1,775 @@
+{
+  "generated_at": "2025-11-12T21:04:54.775355+00:00",
+  "plan": [
+    {
+      "risk_tag": "insecure_model_invocation",
+      "config": "semgrep_rules/custom/llm_model_invocation.yaml",
+      "targets": [
+        "src/mcp_scanner/llm_risk_examples.py"
+      ],
+      "node_ids": [
+        "rag-node-model-http"
+      ]
+    },
+    {
+      "risk_tag": "prompt_injection",
+      "config": "semgrep_rules/custom/llm_prompt_injection.yaml",
+      "targets": [
+        "src/mcp_scanner/llm_risk_examples.py"
+      ],
+      "node_ids": [
+        "rag-node-prompt-builder"
+      ]
+    },
+    {
+      "risk_tag": "unsafe_tool_execution",
+      "config": "semgrep_rules/custom/llm_tool_execution.yaml",
+      "targets": [
+        "src/mcp_scanner/llm_risk_examples.py"
+      ],
+      "node_ids": [
+        "rag-node-tool-exec",
+        "rag-node-os-system"
+      ]
+    }
+  ],
+  "runs": [
+    {
+      "risk_tag": "insecure_model_invocation",
+      "config": "semgrep_rules/custom/llm_model_invocation.yaml",
+      "targets": [
+        "src/mcp_scanner/llm_risk_examples.py"
+      ],
+      "node_ids": [
+        "rag-node-model-http"
+      ],
+      "command": null,
+      "error": "[Errno 2] No such file or directory: 'semgrep'"
+    },
+    {
+      "risk_tag": "prompt_injection",
+      "config": "semgrep_rules/custom/llm_prompt_injection.yaml",
+      "targets": [
+        "src/mcp_scanner/llm_risk_examples.py"
+      ],
+      "node_ids": [
+        "rag-node-prompt-builder"
+      ],
+      "command": null,
+      "error": "[Errno 2] No such file or directory: 'semgrep'"
+    },
+    {
+      "risk_tag": "unsafe_tool_execution",
+      "config": "semgrep_rules/custom/llm_tool_execution.yaml",
+      "targets": [
+        "src/mcp_scanner/llm_risk_examples.py"
+      ],
+      "node_ids": [
+        "rag-node-tool-exec",
+        "rag-node-os-system"
+      ],
+      "command": null,
+      "error": "[Errno 2] No such file or directory: 'semgrep'"
+    }
+  ],
+  "fallback_used": true,
+  "raw_results": [
+    {
+      "check_id": "llm.insecure-model-invocation.insecure-transport",
+      "path": "src/mcp_scanner/llm_risk_examples.py",
+      "start": {
+        "line": 46,
+        "col": 16
+      },
+      "end": {
+        "line": 51,
+        "col": 6
+      },
+      "extra": {
+        "message": "Model invocation occurs over HTTP with certificate checks disabled.",
+        "metadata": {
+          "category": "insecure_model_invocation",
+          "fallback": true
+        },
+        "severity": "WARNING",
+        "lines": "requests.post(\n        \"http://insecure-model.local/invoke\",\n        json={\"prompt\": prompt, \"temperature\": 1.0},\n        timeout=30,\n        verify=False,\n    )"
+      }
+    },
+    {
+      "check_id": "llm.prompt-injection.unescaped-user-input",
+      "path": "src/mcp_scanner/llm_risk_examples.py",
+      "start": {
+        "line": 31,
+        "col": 5
+      },
+      "end": {
+        "line": 31,
+        "col": 68
+      },
+      "extra": {
+        "message": "User-controlled content is concatenated into an LLM prompt without sanitisation. Consider templating or strong validation to defend against prompt injection.",
+        "metadata": {
+          "category": "prompt_injection",
+          "fallback": true
+        },
+        "severity": "WARNING",
+        "lines": "prompt = system_prompt + \"\\n\\nUser instruction:\\n\" + user_input"
+      }
+    },
+    {
+      "check_id": "llm.unsafe-tool-exec.subprocess-shell",
+      "path": "src/mcp_scanner/llm_risk_examples.py",
+      "start": {
+        "line": 40,
+        "col": 12
+      },
+      "end": {
+        "line": 40,
+        "col": 64
+      },
+      "extra": {
+        "message": "LLM-provided commands are executed with shell=True. Validate or sandbox commands before execution.",
+        "metadata": {
+          "category": "unsafe_tool_execution",
+          "fallback": true
+        },
+        "severity": "ERROR",
+        "lines": "subprocess.run(llm_command, shell=True, check=False)"
+      }
+    },
+    {
+      "check_id": "llm.unsafe-tool-exec.os-system",
+      "path": "src/mcp_scanner/llm_risk_examples.py",
+      "start": {
+        "line": 59,
+        "col": 12
+      },
+      "end": {
+        "line": 59,
+        "col": 33
+      },
+      "extra": {
+        "message": "LLM-provided scripts are executed via os.system without validation.",
+        "metadata": {
+          "category": "unsafe_tool_execution",
+          "fallback": true
+        },
+        "severity": "WARNING",
+        "lines": "os.system(llm_script)"
+      }
+    }
+  ],
+  "correlated_findings": [
+    {
+      "finding": {
+        "check_id": "llm.insecure-model-invocation.insecure-transport",
+        "path": "src/mcp_scanner/llm_risk_examples.py",
+        "start": {
+          "line": 46,
+          "col": 16
+        },
+        "end": {
+          "line": 51,
+          "col": 6
+        },
+        "extra": {
+          "message": "Model invocation occurs over HTTP with certificate checks disabled.",
+          "metadata": {
+            "category": "insecure_model_invocation",
+            "fallback": true
+          },
+          "severity": "WARNING",
+          "lines": "requests.post(\n        \"http://insecure-model.local/invoke\",\n        json={\"prompt\": prompt, \"temperature\": 1.0},\n        timeout=30,\n        verify=False,\n    )"
+        }
+      },
+      "node_id": "rag-node-prompt-builder",
+      "match_confidence": "file",
+      "matched_attributes": {
+        "file_path": "src/mcp_scanner/llm_risk_examples.py"
+      }
+    },
+    {
+      "finding": {
+        "check_id": "llm.insecure-model-invocation.insecure-transport",
+        "path": "src/mcp_scanner/llm_risk_examples.py",
+        "start": {
+          "line": 46,
+          "col": 16
+        },
+        "end": {
+          "line": 51,
+          "col": 6
+        },
+        "extra": {
+          "message": "Model invocation occurs over HTTP with certificate checks disabled.",
+          "metadata": {
+            "category": "insecure_model_invocation",
+            "fallback": true
+          },
+          "severity": "WARNING",
+          "lines": "requests.post(\n        \"http://insecure-model.local/invoke\",\n        json={\"prompt\": prompt, \"temperature\": 1.0},\n        timeout=30,\n        verify=False,\n    )"
+        }
+      },
+      "node_id": "rag-node-tool-exec",
+      "match_confidence": "file",
+      "matched_attributes": {
+        "file_path": "src/mcp_scanner/llm_risk_examples.py"
+      }
+    },
+    {
+      "finding": {
+        "check_id": "llm.insecure-model-invocation.insecure-transport",
+        "path": "src/mcp_scanner/llm_risk_examples.py",
+        "start": {
+          "line": 46,
+          "col": 16
+        },
+        "end": {
+          "line": 51,
+          "col": 6
+        },
+        "extra": {
+          "message": "Model invocation occurs over HTTP with certificate checks disabled.",
+          "metadata": {
+            "category": "insecure_model_invocation",
+            "fallback": true
+          },
+          "severity": "WARNING",
+          "lines": "requests.post(\n        \"http://insecure-model.local/invoke\",\n        json={\"prompt\": prompt, \"temperature\": 1.0},\n        timeout=30,\n        verify=False,\n    )"
+        }
+      },
+      "node_id": "rag-node-model-http",
+      "match_confidence": "file",
+      "matched_attributes": {
+        "file_path": "src/mcp_scanner/llm_risk_examples.py"
+      }
+    },
+    {
+      "finding": {
+        "check_id": "llm.insecure-model-invocation.insecure-transport",
+        "path": "src/mcp_scanner/llm_risk_examples.py",
+        "start": {
+          "line": 46,
+          "col": 16
+        },
+        "end": {
+          "line": 51,
+          "col": 6
+        },
+        "extra": {
+          "message": "Model invocation occurs over HTTP with certificate checks disabled.",
+          "metadata": {
+            "category": "insecure_model_invocation",
+            "fallback": true
+          },
+          "severity": "WARNING",
+          "lines": "requests.post(\n        \"http://insecure-model.local/invoke\",\n        json={\"prompt\": prompt, \"temperature\": 1.0},\n        timeout=30,\n        verify=False,\n    )"
+        }
+      },
+      "node_id": "rag-node-os-system",
+      "match_confidence": "file",
+      "matched_attributes": {
+        "file_path": "src/mcp_scanner/llm_risk_examples.py"
+      }
+    },
+    {
+      "finding": {
+        "check_id": "llm.prompt-injection.unescaped-user-input",
+        "path": "src/mcp_scanner/llm_risk_examples.py",
+        "start": {
+          "line": 31,
+          "col": 5
+        },
+        "end": {
+          "line": 31,
+          "col": 68
+        },
+        "extra": {
+          "message": "User-controlled content is concatenated into an LLM prompt without sanitisation. Consider templating or strong validation to defend against prompt injection.",
+          "metadata": {
+            "category": "prompt_injection",
+            "fallback": true
+          },
+          "severity": "WARNING",
+          "lines": "prompt = system_prompt + \"\\n\\nUser instruction:\\n\" + user_input"
+        }
+      },
+      "node_id": "rag-node-prompt-builder",
+      "match_confidence": "file",
+      "matched_attributes": {
+        "file_path": "src/mcp_scanner/llm_risk_examples.py"
+      }
+    },
+    {
+      "finding": {
+        "check_id": "llm.prompt-injection.unescaped-user-input",
+        "path": "src/mcp_scanner/llm_risk_examples.py",
+        "start": {
+          "line": 31,
+          "col": 5
+        },
+        "end": {
+          "line": 31,
+          "col": 68
+        },
+        "extra": {
+          "message": "User-controlled content is concatenated into an LLM prompt without sanitisation. Consider templating or strong validation to defend against prompt injection.",
+          "metadata": {
+            "category": "prompt_injection",
+            "fallback": true
+          },
+          "severity": "WARNING",
+          "lines": "prompt = system_prompt + \"\\n\\nUser instruction:\\n\" + user_input"
+        }
+      },
+      "node_id": "rag-node-tool-exec",
+      "match_confidence": "file",
+      "matched_attributes": {
+        "file_path": "src/mcp_scanner/llm_risk_examples.py"
+      }
+    },
+    {
+      "finding": {
+        "check_id": "llm.prompt-injection.unescaped-user-input",
+        "path": "src/mcp_scanner/llm_risk_examples.py",
+        "start": {
+          "line": 31,
+          "col": 5
+        },
+        "end": {
+          "line": 31,
+          "col": 68
+        },
+        "extra": {
+          "message": "User-controlled content is concatenated into an LLM prompt without sanitisation. Consider templating or strong validation to defend against prompt injection.",
+          "metadata": {
+            "category": "prompt_injection",
+            "fallback": true
+          },
+          "severity": "WARNING",
+          "lines": "prompt = system_prompt + \"\\n\\nUser instruction:\\n\" + user_input"
+        }
+      },
+      "node_id": "rag-node-model-http",
+      "match_confidence": "file",
+      "matched_attributes": {
+        "file_path": "src/mcp_scanner/llm_risk_examples.py"
+      }
+    },
+    {
+      "finding": {
+        "check_id": "llm.prompt-injection.unescaped-user-input",
+        "path": "src/mcp_scanner/llm_risk_examples.py",
+        "start": {
+          "line": 31,
+          "col": 5
+        },
+        "end": {
+          "line": 31,
+          "col": 68
+        },
+        "extra": {
+          "message": "User-controlled content is concatenated into an LLM prompt without sanitisation. Consider templating or strong validation to defend against prompt injection.",
+          "metadata": {
+            "category": "prompt_injection",
+            "fallback": true
+          },
+          "severity": "WARNING",
+          "lines": "prompt = system_prompt + \"\\n\\nUser instruction:\\n\" + user_input"
+        }
+      },
+      "node_id": "rag-node-os-system",
+      "match_confidence": "file",
+      "matched_attributes": {
+        "file_path": "src/mcp_scanner/llm_risk_examples.py"
+      }
+    },
+    {
+      "finding": {
+        "check_id": "llm.unsafe-tool-exec.subprocess-shell",
+        "path": "src/mcp_scanner/llm_risk_examples.py",
+        "start": {
+          "line": 40,
+          "col": 12
+        },
+        "end": {
+          "line": 40,
+          "col": 64
+        },
+        "extra": {
+          "message": "LLM-provided commands are executed with shell=True. Validate or sandbox commands before execution.",
+          "metadata": {
+            "category": "unsafe_tool_execution",
+            "fallback": true
+          },
+          "severity": "ERROR",
+          "lines": "subprocess.run(llm_command, shell=True, check=False)"
+        }
+      },
+      "node_id": "rag-node-prompt-builder",
+      "match_confidence": "file",
+      "matched_attributes": {
+        "file_path": "src/mcp_scanner/llm_risk_examples.py"
+      }
+    },
+    {
+      "finding": {
+        "check_id": "llm.unsafe-tool-exec.subprocess-shell",
+        "path": "src/mcp_scanner/llm_risk_examples.py",
+        "start": {
+          "line": 40,
+          "col": 12
+        },
+        "end": {
+          "line": 40,
+          "col": 64
+        },
+        "extra": {
+          "message": "LLM-provided commands are executed with shell=True. Validate or sandbox commands before execution.",
+          "metadata": {
+            "category": "unsafe_tool_execution",
+            "fallback": true
+          },
+          "severity": "ERROR",
+          "lines": "subprocess.run(llm_command, shell=True, check=False)"
+        }
+      },
+      "node_id": "rag-node-tool-exec",
+      "match_confidence": "file",
+      "matched_attributes": {
+        "file_path": "src/mcp_scanner/llm_risk_examples.py"
+      }
+    },
+    {
+      "finding": {
+        "check_id": "llm.unsafe-tool-exec.subprocess-shell",
+        "path": "src/mcp_scanner/llm_risk_examples.py",
+        "start": {
+          "line": 40,
+          "col": 12
+        },
+        "end": {
+          "line": 40,
+          "col": 64
+        },
+        "extra": {
+          "message": "LLM-provided commands are executed with shell=True. Validate or sandbox commands before execution.",
+          "metadata": {
+            "category": "unsafe_tool_execution",
+            "fallback": true
+          },
+          "severity": "ERROR",
+          "lines": "subprocess.run(llm_command, shell=True, check=False)"
+        }
+      },
+      "node_id": "rag-node-model-http",
+      "match_confidence": "file",
+      "matched_attributes": {
+        "file_path": "src/mcp_scanner/llm_risk_examples.py"
+      }
+    },
+    {
+      "finding": {
+        "check_id": "llm.unsafe-tool-exec.subprocess-shell",
+        "path": "src/mcp_scanner/llm_risk_examples.py",
+        "start": {
+          "line": 40,
+          "col": 12
+        },
+        "end": {
+          "line": 40,
+          "col": 64
+        },
+        "extra": {
+          "message": "LLM-provided commands are executed with shell=True. Validate or sandbox commands before execution.",
+          "metadata": {
+            "category": "unsafe_tool_execution",
+            "fallback": true
+          },
+          "severity": "ERROR",
+          "lines": "subprocess.run(llm_command, shell=True, check=False)"
+        }
+      },
+      "node_id": "rag-node-os-system",
+      "match_confidence": "file",
+      "matched_attributes": {
+        "file_path": "src/mcp_scanner/llm_risk_examples.py"
+      }
+    },
+    {
+      "finding": {
+        "check_id": "llm.unsafe-tool-exec.os-system",
+        "path": "src/mcp_scanner/llm_risk_examples.py",
+        "start": {
+          "line": 59,
+          "col": 12
+        },
+        "end": {
+          "line": 59,
+          "col": 33
+        },
+        "extra": {
+          "message": "LLM-provided scripts are executed via os.system without validation.",
+          "metadata": {
+            "category": "unsafe_tool_execution",
+            "fallback": true
+          },
+          "severity": "WARNING",
+          "lines": "os.system(llm_script)"
+        }
+      },
+      "node_id": "rag-node-prompt-builder",
+      "match_confidence": "file",
+      "matched_attributes": {
+        "file_path": "src/mcp_scanner/llm_risk_examples.py"
+      }
+    },
+    {
+      "finding": {
+        "check_id": "llm.unsafe-tool-exec.os-system",
+        "path": "src/mcp_scanner/llm_risk_examples.py",
+        "start": {
+          "line": 59,
+          "col": 12
+        },
+        "end": {
+          "line": 59,
+          "col": 33
+        },
+        "extra": {
+          "message": "LLM-provided scripts are executed via os.system without validation.",
+          "metadata": {
+            "category": "unsafe_tool_execution",
+            "fallback": true
+          },
+          "severity": "WARNING",
+          "lines": "os.system(llm_script)"
+        }
+      },
+      "node_id": "rag-node-tool-exec",
+      "match_confidence": "file",
+      "matched_attributes": {
+        "file_path": "src/mcp_scanner/llm_risk_examples.py"
+      }
+    },
+    {
+      "finding": {
+        "check_id": "llm.unsafe-tool-exec.os-system",
+        "path": "src/mcp_scanner/llm_risk_examples.py",
+        "start": {
+          "line": 59,
+          "col": 12
+        },
+        "end": {
+          "line": 59,
+          "col": 33
+        },
+        "extra": {
+          "message": "LLM-provided scripts are executed via os.system without validation.",
+          "metadata": {
+            "category": "unsafe_tool_execution",
+            "fallback": true
+          },
+          "severity": "WARNING",
+          "lines": "os.system(llm_script)"
+        }
+      },
+      "node_id": "rag-node-model-http",
+      "match_confidence": "file",
+      "matched_attributes": {
+        "file_path": "src/mcp_scanner/llm_risk_examples.py"
+      }
+    },
+    {
+      "finding": {
+        "check_id": "llm.unsafe-tool-exec.os-system",
+        "path": "src/mcp_scanner/llm_risk_examples.py",
+        "start": {
+          "line": 59,
+          "col": 12
+        },
+        "end": {
+          "line": 59,
+          "col": 33
+        },
+        "extra": {
+          "message": "LLM-provided scripts are executed via os.system without validation.",
+          "metadata": {
+            "category": "unsafe_tool_execution",
+            "fallback": true
+          },
+          "severity": "WARNING",
+          "lines": "os.system(llm_script)"
+        }
+      },
+      "node_id": "rag-node-os-system",
+      "match_confidence": "file",
+      "matched_attributes": {
+        "file_path": "src/mcp_scanner/llm_risk_examples.py"
+      }
+    }
+  ],
+  "summary": {
+    "overview": {
+      "total_findings": 16,
+      "nodes_with_findings": 4,
+      "risk_counts": {
+        "insecure_model_invocation": 4,
+        "prompt_injection": 4,
+        "unsafe_tool_execution": 8
+      }
+    },
+    "by_node": {
+      "rag-node-model-http": {
+        "node": {
+          "id": "rag-node-model-http",
+          "file_path": "src/mcp_scanner/llm_risk_examples.py",
+          "risk_tags": [
+            "insecure_model_invocation"
+          ],
+          "symbol": "invoke_insecure_model",
+          "description": "The model endpoint is invoked over HTTP with TLS checks disabled."
+        },
+        "findings": [
+          {
+            "rule_id": "llm.insecure-model-invocation.insecure-transport",
+            "message": "Model invocation occurs over HTTP with certificate checks disabled.",
+            "path": "src/mcp_scanner/llm_risk_examples.py",
+            "severity": "WARNING",
+            "match_confidence": "file",
+            "matched_attributes": {
+              "file_path": "src/mcp_scanner/llm_risk_examples.py"
+            }
+          }
+        ]
+      },
+      "rag-node-prompt-builder": {
+        "node": {
+          "id": "rag-node-prompt-builder",
+          "file_path": "src/mcp_scanner/llm_risk_examples.py",
+          "risk_tags": [
+            "prompt_injection"
+          ],
+          "symbol": "build_prompt",
+          "description": "User input is directly appended to the system prompt without any neutralisation."
+        },
+        "findings": [
+          {
+            "rule_id": "llm.prompt-injection.unescaped-user-input",
+            "message": "User-controlled content is concatenated into an LLM prompt without sanitisation. Consider templating or strong validation to defend against prompt injection.",
+            "path": "src/mcp_scanner/llm_risk_examples.py",
+            "severity": "WARNING",
+            "match_confidence": "file",
+            "matched_attributes": {
+              "file_path": "src/mcp_scanner/llm_risk_examples.py"
+            }
+          }
+        ]
+      },
+      "rag-node-tool-exec": {
+        "node": {
+          "id": "rag-node-tool-exec",
+          "file_path": "src/mcp_scanner/llm_risk_examples.py",
+          "risk_tags": [
+            "unsafe_tool_execution"
+          ],
+          "symbol": "execute_tool_response",
+          "description": "LLM output is executed in a shell without validation."
+        },
+        "findings": [
+          {
+            "rule_id": "llm.unsafe-tool-exec.subprocess-shell",
+            "message": "LLM-provided commands are executed with shell=True. Validate or sandbox commands before execution.",
+            "path": "src/mcp_scanner/llm_risk_examples.py",
+            "severity": "ERROR",
+            "match_confidence": "file",
+            "matched_attributes": {
+              "file_path": "src/mcp_scanner/llm_risk_examples.py"
+            }
+          },
+          {
+            "rule_id": "llm.unsafe-tool-exec.os-system",
+            "message": "LLM-provided scripts are executed via os.system without validation.",
+            "path": "src/mcp_scanner/llm_risk_examples.py",
+            "severity": "WARNING",
+            "match_confidence": "file",
+            "matched_attributes": {
+              "file_path": "src/mcp_scanner/llm_risk_examples.py"
+            }
+          }
+        ]
+      },
+      "rag-node-os-system": {
+        "node": {
+          "id": "rag-node-os-system",
+          "file_path": "src/mcp_scanner/llm_risk_examples.py",
+          "risk_tags": [
+            "unsafe_tool_execution"
+          ],
+          "symbol": "dispatch_with_os_system",
+          "description": "LLM provided script is passed to os.system."
+        },
+        "findings": [
+          {
+            "rule_id": "llm.unsafe-tool-exec.subprocess-shell",
+            "message": "LLM-provided commands are executed with shell=True. Validate or sandbox commands before execution.",
+            "path": "src/mcp_scanner/llm_risk_examples.py",
+            "severity": "ERROR",
+            "match_confidence": "file",
+            "matched_attributes": {
+              "file_path": "src/mcp_scanner/llm_risk_examples.py"
+            }
+          },
+          {
+            "rule_id": "llm.unsafe-tool-exec.os-system",
+            "message": "LLM-provided scripts are executed via os.system without validation.",
+            "path": "src/mcp_scanner/llm_risk_examples.py",
+            "severity": "WARNING",
+            "match_confidence": "file",
+            "matched_attributes": {
+              "file_path": "src/mcp_scanner/llm_risk_examples.py"
+            }
+          }
+        ]
+      }
+    }
+  },
+  "rag_nodes": [
+    {
+      "id": "rag-node-prompt-builder",
+      "file_path": "src/mcp_scanner/llm_risk_examples.py",
+      "risk_tags": [
+        "prompt_injection"
+      ],
+      "symbol": "build_prompt",
+      "description": "User input is directly appended to the system prompt without any neutralisation."
+    },
+    {
+      "id": "rag-node-tool-exec",
+      "file_path": "src/mcp_scanner/llm_risk_examples.py",
+      "risk_tags": [
+        "unsafe_tool_execution"
+      ],
+      "symbol": "execute_tool_response",
+      "description": "LLM output is executed in a shell without validation."
+    },
+    {
+      "id": "rag-node-model-http",
+      "file_path": "src/mcp_scanner/llm_risk_examples.py",
+      "risk_tags": [
+        "insecure_model_invocation"
+      ],
+      "symbol": "invoke_insecure_model",
+      "description": "The model endpoint is invoked over HTTP with TLS checks disabled."
+    },
+    {
+      "id": "rag-node-os-system",
+      "file_path": "src/mcp_scanner/llm_risk_examples.py",
+      "risk_tags": [
+        "unsafe_tool_execution"
+      ],
+      "symbol": "dispatch_with_os_system",
+      "description": "LLM provided script is passed to os.system."
+    }
+  ]
+}

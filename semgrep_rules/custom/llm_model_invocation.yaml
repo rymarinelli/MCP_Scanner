@@ -1,0 +1,17 @@
+rules:
+  - id: llm.insecure-model-invocation.insecure-transport
+    message: >-
+      LLM endpoints should be invoked over TLS. Avoid using HTTP URLs or disabling
+      certificate verification when sending sensitive prompts.
+    severity: WARNING
+    languages: [python]
+    metadata:
+      category: insecure_model_invocation
+      cwe: "CWE-319"
+      references:
+        - https://owasp.org/www-project-top-10-for-large-language-model-applications/
+    patterns:
+      - pattern: requests.post($URL, ..., verify=False, ...)
+      - metavariable-regex:
+          metavariable: $URL
+          regex: "(?i)^\"http://"

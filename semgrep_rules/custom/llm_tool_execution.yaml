@@ -1,0 +1,34 @@
+rules:
+  - id: llm.unsafe-tool-exec.subprocess-shell
+    message: >-
+      Shell commands sourced from LLM responses should be validated before
+      execution. Avoid invoking subprocess.run with shell=True on untrusted
+      content.
+    severity: ERROR
+    languages: [python]
+    metadata:
+      category: unsafe_tool_execution
+      cwe: "CWE-78"
+      references:
+        - https://owasp.org/www-project-top-10-for-large-language-model-applications/
+    patterns:
+      - pattern: subprocess.run($CMD, shell=True, ...)
+      - metavariable-regex:
+          metavariable: $CMD
+          regex: "(?i).*(llm|model|prompt|ai).*"
+  - id: llm.unsafe-tool-exec.os-system
+    message: >-
+      os.system executes commands via the system shell. Avoid feeding LLM output
+      directly into os.system without validation.
+    severity: WARNING
+    languages: [python]
+    metadata:
+      category: unsafe_tool_execution
+      cwe: "CWE-78"
+      references:
+        - https://owasp.org/www-project-top-10-for-large-language-model-applications/
+    patterns:
+      - pattern: os.system($CMD)
+      - metavariable-regex:
+          metavariable: $CMD
+          regex: "(?i).*(llm|model|prompt|ai).*"
