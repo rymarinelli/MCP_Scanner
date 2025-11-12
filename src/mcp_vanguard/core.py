@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-from .registry import TOOL_REGISTRY
+from .registry import TOOL_REGISTRY, register_tool
 
 
 class ToolNotFoundError(LookupError):
