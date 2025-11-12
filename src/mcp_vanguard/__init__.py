@@ -1,12 +1,9 @@
-"""MCP Vanguard package initialization."""
-from . import core, tools
-from .core import TOOL_REGISTRY, register_tool, run_tool
+"""MCP Vanguard package."""
 
-# Ensure all tool modules are imported so that the registry is populated.
-tools.ensure_tools_registered()
+from .core import run_tool, ToolNotFoundError, ToolExecutionError
 
 __all__ = [
-    "TOOL_REGISTRY",
-    "register_tool",
     "run_tool",
+    "ToolNotFoundError",
+    "ToolExecutionError",
 ]

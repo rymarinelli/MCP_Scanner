@@ -1,54 +1,52 @@
-"""Core utilities for MCP Vanguard tools."""
-from collections.abc import Callable
+"""Core execution helpers for MCP Vanguard tools."""
+from __future__ import annotations
+
 from typing import Any, Dict
 
-TOOL_REGISTRY: Dict[str, Callable[..., Any]] = {}
+from .registry import TOOL_REGISTRY
 
 
-def register_tool(name: str) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
-    """Register a callable as a tool under the provided ``name``.
-
-    Parameters
-    ----------
-    name:
-        The identifier that should be associated with the decorated tool.
-
-    Returns
-    -------
-    Callable
-        A decorator that stores the wrapped callable inside :data:`TOOL_REGISTRY`.
-    """
-
-    def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
-        if not callable(func):
-            raise TypeError("Tools must be callable")
-
-        TOOL_REGISTRY[name] = func
-        return func
-
-    return decorator
+class ToolNotFoundError(LookupError):
+    """Raised when a requested tool is not present in the registry."""
 
 
-def run_tool(name: str, /, **params: Any) -> Any:
-    """Execute the tool registered under ``name`` with ``params``.
-
-    Parameters
-    ----------
-    name:
-        The registered name of the tool to execute.
-    **params:
-        Keyword arguments forwarded to the tool callable.
-
-    Raises
-    ------
-    KeyError
-        If no tool is registered under ``name``.
-    """
-
-    if name not in TOOL_REGISTRY:
-        raise KeyError(f"No tool registered under name '{name}'")
-
-    return TOOL_REGISTRY[name](**params)
+class ToolExecutionError(RuntimeError):
+    """Raised when a tool encounters an unexpected error."""
 
 
-__all__ = ["TOOL_REGISTRY", "register_tool", "run_tool"]
+ToolResponse = Dict[str, Any]
+
+
+def run_tool(tool_name: str, parameters: Dict[str, Any] | None = None) -> ToolResponse:
+    """Execute a tool from the registry and return a HTTP-style response."""
+
+    parameters = parameters or {}
+
+    if tool_name not in TOOL_REGISTRY:
+        return {
+            "status": "error",
+            "error": {
+                "type": "ToolNotFound",
+                "message": f"Unknown tool: {tool_name}",
+            },
+        }
+
+    tool = TOOL_REGISTRY[tool_name]
+
+    try:
+        result = tool(**parameters)
+    except Exception as exc:  # pragma: no cover - defensive wrapper
+        return {
+            "status": "error",
+            "tool": tool_name,
+            "error": {
+                "type": exc.__class__.__name__,
+                "message": str(exc) or repr(exc),
+            },
+        }
+
+    return {
+        "status": "success",
+        "tool": tool_name,
+        "result": result,
+    }
