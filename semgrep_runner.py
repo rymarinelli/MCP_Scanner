@@ -100,9 +100,20 @@ def build_command(configs: Iterable[RunnerConfig], targets: Iterable[str], base_
     return command
 
 
-def execute_semgrep(command: List[str]) -> subprocess.CompletedProcess[str]:
+def execute_semgrep(
+    command: List[str],
+    *,
+    cwd: Optional[Path | str] = None,
+) -> subprocess.CompletedProcess[str]:
     """Execute Semgrep and capture the output."""
-    return subprocess.run(command, check=False, capture_output=True, text=True)
+
+    return subprocess.run(
+        command,
+        check=False,
+        capture_output=True,
+        text=True,
+        cwd=str(cwd) if cwd is not None else None,
+    )
 
 
 def interpret_result(result: subprocess.CompletedProcess[str], command: List[str]) -> RunnerOutput:
