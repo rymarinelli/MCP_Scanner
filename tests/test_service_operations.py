@@ -15,7 +15,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from semgrep_runner import RunnerOutput
+from semgrep_runner import RunnerConfig, RunnerOutput
 
 from service.operations import (
     CommitApplicationResult,
@@ -100,6 +100,69 @@ def test_run_semgrep_scan(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> No
     assert output.status == "ok"
 
 
+def test_run_semgrep_scan_falls_back_when_remote_config_unavailable(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+
+    def fake_load_config(path):  # type: ignore[no-redef]
+        return [
+            RunnerConfig(type="local", value="custom", label="local-rules"),
+            RunnerConfig(type="registry", value="p/owasp-top-ten", label="owasp-top-ten"),
+        ]
+
+    calls: list[list[str]] = []
+
+    def fake_build(configs, targets, base_dir):  # type: ignore[no-redef]
+        command = ["semgrep"]
+        command.extend(f"{cfg.type}:{cfg.value}" for cfg in configs)
+        command.extend(targets)
+        return command
+
+    def fake_execute(command, *, cwd):  # type: ignore[no-redef]
+        calls.append(list(command))
+        if len(calls) == 1:
+            return DummyCompletedProcess(returncode=2, stdout="", stderr="ProxyError")
+        return DummyCompletedProcess(returncode=0, stdout="{}", stderr="")
+
+    def fake_interpret(result, command):  # type: ignore[no-redef]
+        if result.returncode != 0:
+            return RunnerOutput(
+                status="failed",
+                normalized_exit_code=1,
+                semgrep_exit_code=result.returncode,
+                command=command,
+                results={"results": [], "errors": []},
+                stderr=result.stderr,
+            )
+        return RunnerOutput(
+            status="ok",
+            normalized_exit_code=0,
+            semgrep_exit_code=0,
+            command=command,
+            results={"results": [], "errors": []},
+            stderr=None,
+        )
+
+    monkeypatch.setattr("service.operations.load_config", fake_load_config)
+    monkeypatch.setattr("service.operations.build_command", fake_build)
+    monkeypatch.setattr("service.operations.execute_semgrep", fake_execute)
+    monkeypatch.setattr("service.operations.interpret_result", fake_interpret)
+
+    output = run_semgrep_scan(repo)
+    assert output.normalized_exit_code == 0
+    assert len(calls) == 2
+    errors = output.results.get("errors", [])
+    assert any(err.get("reason") == "remote_config_unavailable" for err in errors)
+    skipped = next(
+        err["skipped_configs"]
+        for err in errors
+        if err.get("reason") == "remote_config_unavailable"
+    )
+    assert skipped == ["owasp-top-ten"]
+
+
 def test_generate_remediations_creates_summary(tmp_path: Path) -> None:
     output = RunnerOutput(
         status="ok",
@@ -112,8 +175,10 @@ def test_generate_remediations_creates_summary(tmp_path: Path) -> None:
 
     rag_context_path = tmp_path / "rag_context.json"
     rag_context_path.write_text(json.dumps({"graph": {"nodes": {}, "edges": []}, "node_context": {}}))
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
 
-    result = generate_remediations(output, tmp_path, rag_context_path)
+    result = generate_remediations(output, tmp_path, rag_context_path, repo_path)
     assert isinstance(result, RemediationOutcome)
     assert result.proposals == []
     assert "No remediation suggestions" in result.summary_markdown
@@ -124,6 +189,68 @@ def test_generate_remediations_creates_summary(tmp_path: Path) -> None:
     assert "semgrep_results" in artifacts
     assert artifacts["semgrep_results"].endswith("semgrep_results.json")
     assert "dspy_summary" in artifacts
+
+
+def test_generate_remediations_adds_builtin_sql_patch(tmp_path: Path) -> None:
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+
+    vulnerable_source = """
+from flask import Flask
+
+def search():
+    q = "demo"
+    if q:
+        db = object()
+        cur = db.cursor()
+        # ---- VULNERABLE: concatenating user input into SQL ----
+        sql = "SELECT id, username FROM users WHERE username LIKE '%" + q + "%';"
+        # For the demo we intentionally execute this unsafe SQL
+        cur.execute(sql)
+        results = cur.fetchall()
+
+
+def login():
+    username = "user"
+    password = "pass"
+    db = object()
+    cur = db.cursor()
+    # ---- VULNERABLE: direct string formatting into SQL ----
+    sql = f"SELECT id, username FROM users WHERE username = '{username}' AND password = '{password}' LIMIT 1;"
+    cur.execute(sql)
+    row = cur.fetchone()
+    return row
+""".strip()
+
+    (repo_path / "app_vuln.py").write_text(vulnerable_source + "\n", encoding="utf-8")
+
+    rag_context_path = workspace / "rag_context.json"
+    rag_context_path.write_text(json.dumps({"graph": {"nodes": {}, "edges": []}, "node_context": {}}))
+
+    output = RunnerOutput(
+        status="ok",
+        normalized_exit_code=0,
+        semgrep_exit_code=0,
+        command=["semgrep"],
+        results={
+            "results": [
+                {
+                    "check_id": "workspace.MCP_Scanner.semgrep_rules.custom.python-sql-injection-string-concat",
+                    "path": "app_vuln.py",
+                }
+            ]
+        },
+        stderr=None,
+    )
+
+    result = generate_remediations(output, workspace, rag_context_path, repo_path)
+    assert any(
+        proposal.file_path == "app_vuln.py"
+        and "SELECT id, username FROM users WHERE username LIKE ?" in proposal.diff
+        for proposal in result.proposals
+    )
 
 
 def test_perform_scan_happy_path(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -168,7 +295,7 @@ def test_perform_scan_happy_path(monkeypatch: pytest.MonkeyPatch) -> None:
         }
         return payload, dummy_path, artifact_paths
 
-    def fake_remediation(output, workspace, rag_context_path):  # type: ignore[no-redef]
+    def fake_remediation(output, workspace, rag_context_path, repo_path):  # type: ignore[no-redef]
         return RemediationOutcome(proposals=[], summary_markdown="report", artifacts={})
 
     def fake_apply(repo_path, proposals):  # type: ignore[no-redef]

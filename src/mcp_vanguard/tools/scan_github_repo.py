@@ -4,6 +4,8 @@ from __future__ import annotations
 from typing import Any, Dict
 from urllib.parse import urlparse
 
+from service.operations import ScanExecutionError, perform_scan
+
 from . import register_tool
 
 
@@ -19,10 +21,13 @@ def _validate_github_url(repo_url: str) -> None:
 
 @register_tool("scan_github_repo")
 def scan_github_repo(*, repo_url: str, branch: str | None = None) -> Dict[str, Any]:
-    """Return metadata describing the GitHub repository to scan.
+    """Execute the full MCP scan pipeline against a GitHub repository.
 
-    This minimal implementation performs basic validation and returns
-    normalized data that can be consumed by higher-level scanners.
+    The tool validates the URL, clones the repository, runs enumeration,
+    Semgrep analysis, and remediation synthesis before returning the
+    aggregated results. Any `ScanExecutionError` raised during the workflow
+    is re-raised as a :class:`RuntimeError` so the MCP tool surface can
+    report the failure cleanly.
     """
 
     if not repo_url:
@@ -30,10 +35,10 @@ def scan_github_repo(*, repo_url: str, branch: str | None = None) -> Dict[str, A
 
     _validate_github_url(repo_url)
 
-    data: Dict[str, Any] = {"repo_url": repo_url}
-    if branch:
-        data["branch"] = branch
-    return data
+    try:
+        return perform_scan(repo_url=repo_url, branch=branch)
+    except ScanExecutionError as exc:
+        raise RuntimeError(str(exc)) from exc
 
 
 __all__ = ["scan_github_repo"]

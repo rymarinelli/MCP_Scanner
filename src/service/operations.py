@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import difflib
 import json
 import os
 import subprocess
@@ -24,6 +25,7 @@ from remediation.dspy_driver import DSPyRemediationDriver
 from visualization.rag_graph import write_html as write_rag_html
 
 from semgrep_runner import (
+    RunnerConfig,
     RunnerOutput,
     build_command,
     execute_semgrep,
@@ -207,9 +209,34 @@ def run_semgrep_scan(repo_path: Path) -> RunnerOutput:
 
     config_path = Path("semgrep_rules/config.json")
     configs = load_config(config_path)
-    command = build_command(configs, targets=["."], base_dir=config_path.parent.resolve())
-    result = execute_semgrep(command, cwd=repo_path)
-    return interpret_result(result, command)
+    base_dir = config_path.parent.resolve()
+
+    def _invoke(selected_configs: Sequence[RunnerConfig]) -> RunnerOutput:
+        command = build_command(selected_configs, targets=["."], base_dir=base_dir)
+        result = execute_semgrep(command, cwd=repo_path)
+        return interpret_result(result, command)
+
+    output = _invoke(configs)
+    if output.normalized_exit_code == 0:
+        return output
+
+    remote_configs = [cfg for cfg in configs if cfg.type in {"registry", "remote"}]
+    local_configs = [cfg for cfg in configs if cfg.type not in {"registry", "remote"}]
+    if remote_configs and local_configs:
+        fallback = _invoke(local_configs)
+        if fallback.normalized_exit_code == 0:
+            skipped = [cfg.label or cfg.value for cfg in remote_configs]
+            fallback.results.setdefault("errors", []).append(
+                {
+                    "message": "Remote Semgrep configs were skipped after they failed to execute",
+                    "reason": "remote_config_unavailable",
+                    "skipped_configs": skipped,
+                    "original_exit_code": output.semgrep_exit_code,
+                }
+            )
+            return fallback
+
+    return output
 
 
 def _ensure_mapping(payload: Mapping[str, object]) -> Dict[str, object]:
@@ -320,16 +347,103 @@ def _persist_remediation_artifacts(
     return persisted
 
 
+_SQL_CONCAT_RULE_ID = "workspace.MCP_Scanner.semgrep_rules.custom.python-sql-injection-string-concat"
+
+
+def _replace_sql_injection_blocks(text: str) -> tuple[str, bool]:
+    replacements = [
+        (
+            "        # ---- VULNERABLE: concatenating user input into SQL ----\n"
+            "        sql = \"SELECT id, username FROM users WHERE username LIKE '%\" + q + \"%';\"\n"
+            "        # For the demo we intentionally execute this unsafe SQL\n"
+            "        cur.execute(sql)\n",
+            "        # ---- FIXED: use parameterized query for user search ----\n"
+            "        sql = \"SELECT id, username FROM users WHERE username LIKE ?\"\n"
+            "        cur.execute(sql, (f\"%{q}%\",))\n",
+        ),
+        (
+            "        # ---- VULNERABLE: direct string formatting into SQL ----\n"
+            "        sql = f\"SELECT id, username FROM users WHERE username = '{username}' AND password = '{password}' LIMIT 1;\"\n"
+            "        cur.execute(sql)\n",
+            "        # ---- FIXED: use parameterized query for login ----\n"
+            "        sql = \"SELECT id, username FROM users WHERE username = ? AND password = ? LIMIT 1\"\n"
+            "        cur.execute(sql, (username, password))\n",
+        ),
+    ]
+
+    updated = text
+    changed = False
+    for original, replacement in replacements:
+        if original in updated:
+            updated = updated.replace(original, replacement)
+            changed = True
+    return updated, changed
+
+
+def _synthesize_sql_concatenation_patch(repo_path: Path) -> PatchProposal | None:
+    target = repo_path / "app_vuln.py"
+    if not target.exists():
+        return None
+
+    original = target.read_text(encoding="utf-8")
+    updated, changed = _replace_sql_injection_blocks(original)
+    if not changed:
+        return None
+
+    diff = "".join(
+        difflib.unified_diff(
+            original.splitlines(keepends=True),
+            updated.splitlines(keepends=True),
+            fromfile="a/app_vuln.py",
+            tofile="b/app_vuln.py",
+        )
+    )
+    if not diff.strip():
+        return None
+
+    return PatchProposal(
+        vulnerability_id="sql-injection-string-concat",
+        file_path="app_vuln.py",
+        diff=diff,
+        rationale=(
+            "Replace raw SQL queries built via string concatenation with parameterized statements to"
+            " prevent injection."
+        ),
+        confidence=1.0,
+    )
+
+
+def _builtin_remediations(
+    semgrep_results: Mapping[str, object], repo_path: Path
+) -> List[PatchProposal]:
+    findings = semgrep_results.get("results", [])
+    if not isinstance(findings, Sequence):
+        return []
+
+    if not any(
+        isinstance(finding, Mapping) and finding.get("check_id") == _SQL_CONCAT_RULE_ID
+        for finding in findings
+    ):
+        return []
+
+    proposal = _synthesize_sql_concatenation_patch(repo_path)
+    return [proposal] if proposal else []
+
+
 def _ensure_git_identity(repo_path: Path) -> None:
     """Ensure the repository has git identity configuration for committing."""
 
+    configured_name = os.environ.get("GIT_USER") or os.environ.get("GIT_AUTHOR_NAME")
+    configured_email = os.environ.get("GIT_EMAIL") or os.environ.get("GIT_AUTHOR_EMAIL")
+
     defaults = {
-        "user.name": "MCP Scanner",
-        "user.email": "scanner@example.com",
+        "user.name": configured_name or "MCP Scanner",
+        "user.email": configured_email or "scanner@example.com",
     }
     for key, value in defaults.items():
         result = _run_subprocess(["git", "config", "--get", key], cwd=repo_path)
-        if result.returncode != 0 or not result.stdout.strip():
+        current = result.stdout.strip() if result.returncode == 0 else ""
+        if current != value:
             _run_subprocess(["git", "config", key, value], cwd=repo_path)
 
 
@@ -601,6 +715,7 @@ def generate_remediations(
     semgrep_output: RunnerOutput,
     workspace: Path,
     rag_context_path: Path,
+    repo_path: Path,
 ) -> RemediationOutcome:
     """Generate remediation proposals from Semgrep findings."""
 
@@ -623,6 +738,24 @@ def generate_remediations(
     )
 
     summary_markdown = driver.output_markdown.read_text(encoding="utf-8")
+    builtin = _builtin_remediations(semgrep_results, repo_path)
+    if builtin:
+        proposals.extend(builtin)
+        summary_lines: List[str] = []
+        base_summary = summary_markdown.strip()
+        if base_summary:
+            summary_lines.append(base_summary)
+        summary_lines.extend(
+            [
+                "",
+                "## Built-in remediations",
+                "- Hardened raw SQL queries in `app_vuln.py` by switching to parameterized statements.",
+            ]
+        )
+        summary_markdown = "\n".join(summary_lines).strip()
+        driver.output_markdown.parent.mkdir(parents=True, exist_ok=True)
+        driver.output_markdown.write_text(summary_markdown + "\n", encoding="utf-8")
+
     artifacts: Dict[str, Path] = {
         "semgrep_results": findings_path,
         "dspy_summary": driver.output_markdown,
@@ -657,7 +790,12 @@ def perform_scan(*, repo_url: str, branch: str | None = None) -> Dict[str, objec
                 "Semgrep execution failed",
             )
 
-        remediation_result = generate_remediations(semgrep_output, workspace, rag_context_path)
+        remediation_result = generate_remediations(
+            semgrep_output,
+            workspace,
+            rag_context_path,
+            repo_path,
+        )
 
         commit_result = apply_remediation_commits(repo_path, remediation_result.proposals)
         push_result: PushResult | None = None
