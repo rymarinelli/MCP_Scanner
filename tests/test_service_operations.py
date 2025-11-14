@@ -274,7 +274,7 @@ def login():
         results={
             "results": [
                 {
-                    "check_id": "workspace.MCP_Scanner.semgrep_rules.custom.python-sql-injection-string-concat",
+                    "check_id": "semgrep_rules.custom.python-sql-injection-string-concat",
                     "path": "app_vuln.py",
                 }
             ]

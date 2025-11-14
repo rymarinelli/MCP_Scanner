@@ -362,7 +362,7 @@ def _persist_remediation_artifacts(
     return persisted
 
 
-_SQL_CONCAT_RULE_ID = "workspace.MCP_Scanner.semgrep_rules.custom.python-sql-injection-string-concat"
+_SQL_CONCAT_RULE_SUFFIX = "python-sql-injection-string-concat"
 
 
 def _replace_sql_injection_blocks(text: str) -> tuple[str, bool]:
@@ -436,7 +436,8 @@ def _builtin_remediations(
         return []
 
     if not any(
-        isinstance(finding, Mapping) and finding.get("check_id") == _SQL_CONCAT_RULE_ID
+        isinstance(finding, Mapping)
+        and str(finding.get("check_id", "")).endswith(_SQL_CONCAT_RULE_SUFFIX)
         for finding in findings
     ):
         return []
