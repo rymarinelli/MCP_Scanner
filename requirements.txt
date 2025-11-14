@@ -1,0 +1,4 @@
+pydantic>=2.5
+pydantic-settings>=2.0
+torch>=2.1
+transformers>=4.38
