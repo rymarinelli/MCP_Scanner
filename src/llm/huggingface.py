@@ -33,7 +33,7 @@ class HuggingFaceCausalLMClient(LLMClient):
     def __init__(
         self,
         *,
-        model_name: str = "01-ai/Yi-Coder-9B-Chat",
+        model_name: str = "ise-uiuc/Magicoder-S-DS-6.7B",
         device: str = "cpu",
         generation: GenerationSettings | None = None,
         tokenizer_kwargs: Dict[str, Any] | None = None,
