@@ -175,25 +175,22 @@ Once configured, start the HTTP service (either directly or inside Docker):
 python -m service.http_server  # binds to 0.0.0.0:8000 by default
 ```
 
-Trigger a full remediation run against a GitHub repository by calling the
-`scan_github_repo` tool via the FastAPI bridge:
+Trigger a full remediation run against a GitHub repository by POSTing directly
+to the `/scan` endpoint:
 
 ```bash
 curl -X POST \
   -H "Content-Type: application/json" \
   -d '{
-        "tool": "scan_github_repo",
-        "arguments": {
-          "repo_url": "https://github.com/rymarinelli/vulnerable_flask_SQL",
-          "branch": "main",
-          "quick": false,
-          "apply_commits": true,
-          "push": true,
-          "create_pr": true,
-          "pr_labels": ["automated", "security"]
-        }
+        "repo_url": "https://github.com/rymarinelli/vulnerable_flask_SQL",
+        "branch": "main",
+        "quick": false,
+        "apply_commits": true,
+        "push": true,
+        "create_pr": true,
+        "pr_labels": ["automated", "security"]
       }' \
-  http://localhost:8000/call_tool
+  http://localhost:8000/scan
 ```
 
 The response bundles enumeration artifacts, Semgrep findings, applied commits,
