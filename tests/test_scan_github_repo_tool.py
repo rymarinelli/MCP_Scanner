@@ -34,6 +34,7 @@ def test_scan_github_repo_invokes_full_scan(monkeypatch: pytest.MonkeyPatch) -> 
         create_pr=False,
         base_branch="develop",
         pr_labels=["security"],
+        github_token="ghp_token",
     )
 
     assert result == {"repository": {"url": "https://github.com/example/demo", "branch": "main"}}
@@ -45,6 +46,7 @@ def test_scan_github_repo_invokes_full_scan(monkeypatch: pytest.MonkeyPatch) -> 
     assert captured["create_pr"] is False
     assert captured["base_branch"] == "develop"
     assert captured["pr_labels"] == ["security"]
+    assert captured["github_token"] == "ghp_token"
 
 
 def test_scan_github_repo_rejects_non_github_url() -> None:

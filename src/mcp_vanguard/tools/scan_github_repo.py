@@ -30,6 +30,7 @@ def scan_github_repo(
     create_pr: bool = True,
     base_branch: str | None = None,
     pr_labels: Sequence[str] | None = None,
+    github_token: str | None = None,
 ) -> Dict[str, Any]:
     """Execute the full MCP scan pipeline against a GitHub repository.
 
@@ -55,6 +56,7 @@ def scan_github_repo(
             create_pr=create_pr,
             base_branch=base_branch,
             pr_labels=pr_labels,
+            github_token=github_token,
         )
     except ScanExecutionError as exc:
         raise RuntimeError(str(exc)) from exc

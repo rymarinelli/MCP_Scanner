@@ -30,6 +30,7 @@ def test_scan_endpoint(monkeypatch):
         create_pr: bool,
         base_branch: str | None,
         pr_labels: list[str] | None,
+        github_token: str | None,
     ):  # type: ignore[no-redef]
         captured.update(
             {
@@ -41,6 +42,7 @@ def test_scan_endpoint(monkeypatch):
                 "create_pr": create_pr,
                 "base_branch": base_branch,
                 "pr_labels": pr_labels,
+                "github_token": github_token,
             }
         )
         return {
@@ -70,6 +72,7 @@ def test_scan_endpoint(monkeypatch):
                 "create_pr": False,
                 "base_branch": "develop",
                 "pr_labels": ["automated", "security"],
+                "github_token": "ghp_123",
             }
         )
         conn.request("POST", "/scan", body=payload, headers={"Content-Type": "application/json"})
@@ -89,6 +92,7 @@ def test_scan_endpoint(monkeypatch):
             "create_pr": False,
             "base_branch": "develop",
             "pr_labels": ["automated", "security"],
+            "github_token": "ghp_123",
         }
     finally:
         http_server.SCAN_HANDLER = original_handler
@@ -122,6 +126,38 @@ def test_scan_endpoint_rejects_invalid_pr_labels(monkeypatch):
         assert response.status == 400
         assert data["status"] == "error"
         assert data["error"]["message"] == "Field 'pr_labels' must be an array of strings if provided"
+    finally:
+        http_server.SCAN_HANDLER = original_handler
+        server.shutdown()
+        thread.join(timeout=1)
+
+
+def test_scan_endpoint_rejects_non_string_token(monkeypatch):
+    from service import http_server
+
+    def fake_handler(**_: object):  # type: ignore[no-redef]
+        raise AssertionError("handler should not be invoked for invalid payloads")
+
+    original_handler = http_server.SCAN_HANDLER
+    http_server.SCAN_HANDLER = fake_handler
+
+    server = http_server.ThreadingHTTPServer(("127.0.0.1", 0), http_server.MCPRequestHandler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    time.sleep(0.1)
+
+    try:
+        host, port = server.server_address
+        conn = HTTPConnection(host, port)
+        payload = json.dumps({"repo_url": "https://example.com/repo.git", "github_token": ["oops"]})
+        conn.request("POST", "/scan", body=payload, headers={"Content-Type": "application/json"})
+        response = conn.getresponse()
+        body = response.read()
+        data = json.loads(body)
+
+        assert response.status == 400
+        assert data["status"] == "error"
+        assert data["error"]["message"] == "Field 'github_token' must be a string if provided"
     finally:
         http_server.SCAN_HANDLER = original_handler
         server.shutdown()

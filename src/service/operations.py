@@ -827,6 +827,7 @@ def perform_scan(
     create_pr: bool = True,
     base_branch: str | None = None,
     pr_labels: Sequence[str] | None = None,
+    github_token: str | None = None,
 ) -> Dict[str, object]:
     """Execute the full scan and remediation workflow for a repository."""
 
@@ -867,6 +868,7 @@ def perform_scan(
                     repo_path=repo_path,
                     repo_url=repo_url,
                     branch_name=commit_result.branch,
+                    token=github_token,
                 )
             else:
                 push_result = PushResult(
@@ -883,6 +885,7 @@ def perform_scan(
                         base_branch=base_branch or branch,
                         summary_markdown=remediation_result.summary_markdown,
                         commits=commit_result.commits,
+                        token=github_token,
                         pr_labels=pr_labels,
                     )
                 elif push_result.status == "skipped":

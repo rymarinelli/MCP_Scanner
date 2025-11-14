@@ -194,7 +194,8 @@ curl -X POST \
         "apply_commits": true,
         "push": true,
         "create_pr": true,
-        "pr_labels": ["automated", "security"]
+        "pr_labels": ["automated", "security"],
+        "github_token": "'"${GITHUB_TOKEN}"'"
       }' \
   http://localhost:8000/scan
 ```
@@ -237,12 +238,14 @@ curl -X POST \
         "repo_url": "https://github.com/rymarinelli/vulnerable_flask_SQL",
         "apply_commits": true,
         "push": true,
-        "create_pr": true
+        "create_pr": true,
+        "github_token": "'"${GITHUB_TOKEN}"'"
       }' \
   https://busy-papers-melt.loca.lt/scan
 ```
 
-As long as `GIT_USER`, `GIT_EMAIL`, and `GITHUB_TOKEN` are present in the
-environment where the tunnel script is running, this request clones the target
-repository, synthesizes fixes, commits them to a remediation branch, pushes the
-branch, and opens a GitHub pull request.
+As long as either `GITHUB_TOKEN` is provided in the JSON payload (as shown
+above) or exported in the environment where the tunnel script is running, the
+scanner authenticates to GitHub, pushes the remediation branch, and opens a
+pull request. Keep `GIT_USER` and `GIT_EMAIL` configured to control the commit
+authorship information applied to generated fixes.
