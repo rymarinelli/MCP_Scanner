@@ -131,12 +131,23 @@ docker run --rm -p 8000:8000 mcp-scanner
 ```
 
 Trigger a scan by sending a `POST` request to the `/scan` endpoint. Provide
-the Git URL (and optional branch) in the request body:
+the Git URL (and optional branch) in the request body. You can also toggle
+pipeline behaviors—such as disabling remediation commits or pull requests—by
+supplying the optional boolean switches shown below:
 
 ```bash
 curl -X POST \
   -H "Content-Type: application/json" \
-  -d '{"repo_url": "https://github.com/example/repo.git", "branch": "main"}' \
+  -d '{
+        "repo_url": "https://github.com/example/repo.git",
+        "branch": "main",
+        "quick": false,
+        "apply_commits": true,
+        "push": true,
+        "create_pr": true,
+        "base_branch": "main",
+        "pr_labels": ["automated", "security"]
+      }' \
   http://localhost:8000/scan
 ```
 
@@ -211,4 +222,24 @@ Key flags:
   `0.0.0.0:8000`).
 
 The command keeps running until interrupted with `Ctrl+C`, shutting down both
-the server and tunnel cleanly when you exit.
+the server and tunnel cleanly when you exit. Once the script prints the
+`🌐 Public MCP URL`, you can invoke the `/scan` endpoint from any machine and
+drive a full remediation (including Git commits, pushes, and pull requests) via
+`curl`:
+
+```bash
+curl -X POST \
+  -H "Content-Type: application/json" \
+  -d '{
+        "repo_url": "https://github.com/rymarinelli/vulnerable_flask_SQL",
+        "apply_commits": true,
+        "push": true,
+        "create_pr": true
+      }' \
+  https://busy-papers-melt.loca.lt/scan
+```
+
+As long as `GIT_USER`, `GIT_EMAIL`, and `GITHUB_TOKEN` are present in the
+environment where the tunnel script is running, this request clones the target
+repository, synthesizes fixes, commits them to a remediation branch, pushes the
+branch, and opens a GitHub pull request.

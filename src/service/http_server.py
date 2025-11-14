@@ -8,7 +8,7 @@ import os
 import threading
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, Sequence, Tuple
 
 from .operations import ScanExecutionError, perform_scan
 
@@ -90,6 +90,12 @@ class MCPRequestHandler(BaseHTTPRequestHandler):
 
         repo_url = payload.get("repo_url")
         branch = payload.get("branch")
+        quick = payload.get("quick", False)
+        apply_commits = payload.get("apply_commits", True)
+        push = payload.get("push", True)
+        create_pr = payload.get("create_pr", True)
+        base_branch = payload.get("base_branch")
+        pr_labels = payload.get("pr_labels")
 
         if not isinstance(repo_url, str) or not repo_url.strip():
             self._send_error(HTTPStatus.BAD_REQUEST, "Field 'repo_url' is required")
@@ -99,8 +105,49 @@ class MCPRequestHandler(BaseHTTPRequestHandler):
             self._send_error(HTTPStatus.BAD_REQUEST, "Field 'branch' must be a string if provided")
             return
 
+        if not isinstance(quick, bool):
+            self._send_error(HTTPStatus.BAD_REQUEST, "Field 'quick' must be a boolean")
+            return
+
+        if not isinstance(apply_commits, bool):
+            self._send_error(HTTPStatus.BAD_REQUEST, "Field 'apply_commits' must be a boolean")
+            return
+
+        if not isinstance(push, bool):
+            self._send_error(HTTPStatus.BAD_REQUEST, "Field 'push' must be a boolean")
+            return
+
+        if not isinstance(create_pr, bool):
+            self._send_error(HTTPStatus.BAD_REQUEST, "Field 'create_pr' must be a boolean")
+            return
+
+        if base_branch is not None and not isinstance(base_branch, str):
+            self._send_error(HTTPStatus.BAD_REQUEST, "Field 'base_branch' must be a string if provided")
+            return
+
+        parsed_labels: Sequence[str] | None
+        if pr_labels is None:
+            parsed_labels = None
+        elif isinstance(pr_labels, list) and all(isinstance(label, str) for label in pr_labels):
+            parsed_labels = pr_labels
+        else:
+            self._send_error(
+                HTTPStatus.BAD_REQUEST,
+                "Field 'pr_labels' must be an array of strings if provided",
+            )
+            return
+
         try:
-            result = SCAN_HANDLER(repo_url=repo_url, branch=branch)
+            result = SCAN_HANDLER(
+                repo_url=repo_url,
+                branch=branch,
+                quick=quick,
+                apply_commits=apply_commits,
+                push=push,
+                create_pr=create_pr,
+                base_branch=base_branch,
+                pr_labels=parsed_labels,
+            )
         except ValueError as exc:
             self._send_error(HTTPStatus.BAD_REQUEST, str(exc))
             return
