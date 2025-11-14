@@ -26,6 +26,7 @@ from service.operations import (
     generate_remediations,
     perform_scan,
     run_semgrep_scan,
+    _parse_repo_slug,
 )
 
 from mcp_scanner.models import PatchProposal
@@ -253,4 +254,16 @@ def test_apply_remediation_commits_handles_failed_patch(tmp_path: Path) -> None:
     assert result.errors
     assert result.errors[0].vulnerability_id == "vuln-bad"
     assert "secure" not in (repo / "app.py").read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize(
+    "url, expected",
+    [
+        ("https://github.com/example/project.git", ("example", "project")),
+        ("git@github.com:example/project.git", ("example", "project")),
+        ("ssh://git@github.com/example/project.git", ("example", "project")),
+    ],
+)
+def test_parse_repo_slug_supports_common_git_urls(url: str, expected: tuple[str, str]) -> None:
+    assert _parse_repo_slug(url) == expected
 

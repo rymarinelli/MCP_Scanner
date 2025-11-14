@@ -459,13 +459,33 @@ def _build_authenticated_remote(repo_url: str, token: str) -> Optional[str]:
 
 
 def _parse_repo_slug(repo_url: str) -> Optional[Tuple[str, str]]:
-    parsed = urlparse(repo_url)
-    path = parsed.path.strip("/")
+    """Derive the ``(owner, repo)`` tuple from common Git remote formats."""
+
+    path: str = ""
+
+    if repo_url.startswith("git@"):
+        # Handle scp-like SSH URLs such as ``git@github.com:owner/repo.git``.
+        try:
+            _, path = repo_url.split(":", 1)
+        except ValueError:
+            return None
+    else:
+        parsed = urlparse(repo_url)
+        if parsed.scheme and parsed.netloc:
+            path = parsed.path
+        elif parsed.path and not parsed.scheme and not parsed.netloc:
+            path = parsed.path
+        else:
+            return None
+
+    path = path.strip("/")
     if not path:
         return None
+
     parts = path.split("/")
     if len(parts) < 2:
         return None
+
     owner, repo = parts[0], parts[1]
     if repo.endswith(".git"):
         repo = repo[:-4]
