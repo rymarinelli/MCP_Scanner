@@ -19,6 +19,7 @@ from semgrep_runner import RunnerConfig, RunnerOutput
 
 from service.operations import (
     CommitApplicationResult,
+    CommitRecord,
     RemediationOutcome,
     ScanExecutionError,
     apply_remediation_commits,
@@ -97,6 +98,42 @@ def test_run_semgrep_scan(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> No
     monkeypatch.setattr("service.operations.interpret_result", fake_interpret)
 
     output = run_semgrep_scan(tmp_path)
+    assert output.status == "ok"
+
+
+def test_run_semgrep_scan_quick_mode(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+
+    def fake_build(configs, targets, base_dir):  # type: ignore[no-redef]
+        assert len(configs) == 1
+        assert configs[0].value == "auto"
+        command = ["semgrep", "scan"]
+        for config in configs:
+            command.extend(["--config", config.value])
+        command.extend(targets)
+        return command
+
+    def fake_execute(command, *, cwd):  # type: ignore[no-redef]
+        assert command == ["semgrep", "scan", "--config", "auto", "."]
+        assert cwd == repo
+        return DummyCompletedProcess(returncode=0, stdout="{}", stderr="")
+
+    def fake_interpret(result, command):  # type: ignore[no-redef]
+        return RunnerOutput(
+            status="ok",
+            normalized_exit_code=0,
+            semgrep_exit_code=0,
+            command=command,
+            results={"results": []},
+            stderr=None,
+        )
+
+    monkeypatch.setattr("service.operations.build_command", fake_build)
+    monkeypatch.setattr("service.operations.execute_semgrep", fake_execute)
+    monkeypatch.setattr("service.operations.interpret_result", fake_interpret)
+
+    output = run_semgrep_scan(repo, quick=True)
     assert output.status == "ok"
 
 
@@ -268,7 +305,8 @@ def test_perform_scan_happy_path(monkeypatch: pytest.MonkeyPatch) -> None:
         stderr=None,
     )
 
-    def fake_semgrep(path):  # type: ignore[no-redef]
+    def fake_semgrep(path, *, quick=False):  # type: ignore[no-redef]
+        assert quick is False
         return fake_output
 
     def fake_enumeration(repo_path, workspace):  # type: ignore[no-redef]
@@ -321,6 +359,129 @@ def test_perform_scan_happy_path(monkeypatch: pytest.MonkeyPatch) -> None:
     assert result["remediation"]["proposals"] == []
     assert result["remediation"]["summary_markdown"] == "report"
     assert result["enumeration"]["rag_context"] == {}
+
+
+def test_perform_scan_skips_commits_when_disabled(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    repo_dir = tmp_path / "repo"
+    repo_dir.mkdir()
+
+    def fake_clone(repo_url, branch, workspace):  # type: ignore[no-redef]
+        return repo_dir
+
+    fake_output = RunnerOutput(
+        status="ok",
+        normalized_exit_code=0,
+        semgrep_exit_code=0,
+        command=["semgrep"],
+        results={"results": []},
+        stderr=None,
+    )
+
+    def fake_semgrep(path, *, quick=False):  # type: ignore[no-redef]
+        assert quick is True
+        return fake_output
+
+    def fake_enumeration(repo_path, workspace):  # type: ignore[no-redef]
+        rag_context_path = workspace / "rag_context.json"
+        rag_context_path.write_text("{}")
+        return {"rag_context": {}}, rag_context_path, {}
+
+    def fake_remediation(output, workspace, rag_context_path, repo_path):  # type: ignore[no-redef]
+        return RemediationOutcome(proposals=[], summary_markdown="summary", artifacts={})
+
+    def fail_apply(*args, **kwargs):  # type: ignore[no-redef]
+        raise AssertionError("apply_remediation_commits should not be invoked")
+
+    monkeypatch.setattr("service.operations.clone_repository", fake_clone)
+    monkeypatch.setattr("service.operations.enumerate_repository", fake_enumeration)
+    monkeypatch.setattr("service.operations.run_semgrep_scan", fake_semgrep)
+    monkeypatch.setattr("service.operations.generate_remediations", fake_remediation)
+    monkeypatch.setattr("service.operations.apply_remediation_commits", fail_apply)
+
+    result = perform_scan(
+        repo_url="https://example.com/project.git",
+        branch="main",
+        quick=True,
+        apply_commits=False,
+    )
+
+    remediation = result["remediation"]
+    assert remediation["summary_markdown"] == "summary"
+    assert remediation["proposals"] == []
+    assert "push" not in remediation
+    assert "pull_request" not in remediation
+
+
+def test_perform_scan_skips_push_and_pr_when_disabled(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    repo_dir = tmp_path / "repo"
+    repo_dir.mkdir()
+
+    def fake_clone(repo_url, branch, workspace):  # type: ignore[no-redef]
+        return repo_dir
+
+    fake_output = RunnerOutput(
+        status="ok",
+        normalized_exit_code=0,
+        semgrep_exit_code=0,
+        command=["semgrep"],
+        results={"results": []},
+        stderr=None,
+    )
+
+    def fake_semgrep(path, *, quick=False):  # type: ignore[no-redef]
+        return fake_output
+
+    def fake_enumeration(repo_path, workspace):  # type: ignore[no-redef]
+        rag_context_path = workspace / "rag_context.json"
+        rag_context_path.write_text("{}")
+        return {"rag_context": {}}, rag_context_path, {}
+
+    proposal = PatchProposal(
+        vulnerability_id="demo",
+        file_path="app.py",
+        diff="diff --git a/app.py b/app.py\n",
+        rationale="",
+        confidence=1.0,
+    )
+
+    def fake_remediation(output, workspace, rag_context_path, repo_path):  # type: ignore[no-redef]
+        return RemediationOutcome(proposals=[proposal], summary_markdown="summary", artifacts={})
+
+    def fake_apply(repo_path, proposals):  # type: ignore[no-redef]
+        commit = CommitRecord(
+            vulnerability_id="demo",
+            commit_sha="abc1234",
+            message="fix(demo): apply remediation",
+            proposals=list(proposals),
+        )
+        return CommitApplicationResult(branch="mcp/remediation-1234", commits=[commit], errors=[])
+
+    def fail_push(*args, **kwargs):  # type: ignore[no-redef]
+        raise AssertionError("push_remediation_branch should not be called when disabled")
+
+    def fail_pr(*args, **kwargs):  # type: ignore[no-redef]
+        raise AssertionError("open_remediation_pull_request should not be called when push is skipped")
+
+    monkeypatch.setattr("service.operations.clone_repository", fake_clone)
+    monkeypatch.setattr("service.operations.enumerate_repository", fake_enumeration)
+    monkeypatch.setattr("service.operations.run_semgrep_scan", fake_semgrep)
+    monkeypatch.setattr("service.operations.generate_remediations", fake_remediation)
+    monkeypatch.setattr("service.operations.apply_remediation_commits", fake_apply)
+    monkeypatch.setattr("service.operations.push_remediation_branch", fail_push)
+    monkeypatch.setattr("service.operations.open_remediation_pull_request", fail_pr)
+
+    result = perform_scan(
+        repo_url="https://example.com/project.git",
+        branch="main",
+        push=False,
+        create_pr=True,
+    )
+
+    remediation = result["remediation"]
+    assert remediation["push"]["status"] == "skipped"
+    assert remediation["push"]["reason"] == "push disabled by configuration"
+    assert remediation["pull_request"]["status"] == "skipped"
+    assert remediation["pull_request"]["reason"] == "push disabled by configuration"
 
 
 def test_perform_scan_rejects_option_like_repo_url(monkeypatch: pytest.MonkeyPatch) -> None:

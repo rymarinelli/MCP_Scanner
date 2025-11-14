@@ -135,6 +135,7 @@ class PullRequestResult:
     error: Optional[str] = None
     reason: Optional[str] = None
     response: Optional[Dict[str, Any]] = None
+    labels: Optional[Dict[str, Any]] = None
 
     def to_dict(self) -> Dict[str, object]:
         payload: Dict[str, object] = {"status": self.status}
@@ -148,6 +149,8 @@ class PullRequestResult:
             payload["reason"] = self.reason
         if self.response is not None:
             payload["response"] = self.response
+        if self.labels is not None:
+            payload["labels"] = self.labels
         return payload
 
 
@@ -204,11 +207,23 @@ def clone_repository(repo_url: str, branch: str | None, workspace: Path) -> Path
     return repo_dir
 
 
-def run_semgrep_scan(repo_path: Path) -> RunnerOutput:
-    """Run Semgrep against ``repo_path`` using the bundled configuration."""
+def run_semgrep_scan(repo_path: Path, *, quick: bool = False) -> RunnerOutput:
+    """Run Semgrep against ``repo_path`` using the bundled configuration.
+
+    When ``quick`` is ``True`` the scan is executed using Semgrep's
+    ``--config auto`` mode, mirroring the behaviour of the legacy MCP server
+    implementation. Otherwise the repository-specific configuration bundled
+    with the service is used and the usual fallback logic for remote rule
+    failures remains in place.
+    """
 
     config_path = Path("semgrep_rules/config.json")
-    configs = load_config(config_path)
+    if quick:
+        configs: Sequence[RunnerConfig] = [
+            RunnerConfig(type="remote", value="auto", label="auto"),
+        ]
+    else:
+        configs = load_config(config_path)
     base_dir = config_path.parent.resolve()
 
     def _invoke(selected_configs: Sequence[RunnerConfig]) -> RunnerOutput:
@@ -642,6 +657,7 @@ def open_remediation_pull_request(
     summary_markdown: str,
     commits: Sequence[CommitRecord],
     token: Optional[str] = None,
+    pr_labels: Sequence[str] | None = None,
 ) -> PullRequestResult:
     """Open a pull request summarizing the remediation commits."""
 
@@ -703,11 +719,40 @@ def open_remediation_pull_request(
     except Exception as exc:  # pragma: no cover - defensive guard
         return PullRequestResult(status="error", error=str(exc))
 
+    labels_result: Dict[str, Any] | None = None
+    if pr_labels:
+        issue_number = data.get("number")
+        if issue_number is None:
+            labels_result = {"status": "skipped", "reason": "missing pull request number"}
+        else:
+            labels_url = f"https://api.github.com/repos/{owner}/{repo}/issues/{issue_number}/labels"
+            payload = json.dumps({"labels": list(pr_labels)}).encode("utf-8")
+            label_request = urllib.request.Request(labels_url, data=payload, method="POST")
+            label_request.add_header("Authorization", f"Bearer {token}")
+            label_request.add_header("Accept", "application/vnd.github+json")
+            label_request.add_header("Content-Type", "application/json")
+            try:
+                with urllib.request.urlopen(label_request) as response:
+                    labels_result = {
+                        "status": "success",
+                        "response": json.loads(response.read().decode("utf-8")),
+                    }
+            except urllib.error.HTTPError as exc:  # pragma: no cover - requires HTTP interaction
+                error_body = exc.read().decode("utf-8", errors="ignore")
+                labels_result = {
+                    "status": "error",
+                    "error": f"GitHub API returned {exc.code}",
+                    "body": error_body,
+                }
+            except Exception as exc:  # pragma: no cover - defensive guard
+                labels_result = {"status": "error", "error": str(exc)}
+
     return PullRequestResult(
         status="success",
         url=data.get("html_url"),
         number=data.get("number"),
         response=data,
+        labels=labels_result,
     )
 
 
@@ -771,7 +816,17 @@ def generate_remediations(
     )
 
 
-def perform_scan(*, repo_url: str, branch: str | None = None) -> Dict[str, object]:
+def perform_scan(
+    *,
+    repo_url: str,
+    branch: str | None = None,
+    quick: bool = False,
+    apply_commits: bool = True,
+    push: bool = True,
+    create_pr: bool = True,
+    base_branch: str | None = None,
+    pr_labels: Sequence[str] | None = None,
+) -> Dict[str, object]:
     """Execute the full scan and remediation workflow for a repository."""
 
     _validate_repo_inputs(repo_url, branch)
@@ -782,7 +837,7 @@ def perform_scan(*, repo_url: str, branch: str | None = None) -> Dict[str, objec
         workspace = Path(tmpdir)
         repo_path = clone_repository(repo_url, branch, workspace)
         enumeration_payload, rag_context_path, artifact_paths = enumerate_repository(repo_path, workspace)
-        semgrep_output = run_semgrep_scan(repo_path)
+        semgrep_output = run_semgrep_scan(repo_path, quick=quick)
 
         semgrep_payload = semgrep_output.to_dict()
         if semgrep_output.normalized_exit_code != 0:
@@ -797,26 +852,42 @@ def perform_scan(*, repo_url: str, branch: str | None = None) -> Dict[str, objec
             repo_path,
         )
 
-        commit_result = apply_remediation_commits(repo_path, remediation_result.proposals)
+        if apply_commits:
+            commit_result = apply_remediation_commits(repo_path, remediation_result.proposals)
+        else:
+            commit_result = CommitApplicationResult(branch=None, commits=[], errors=[])
+
         push_result: PushResult | None = None
         pr_result: PullRequestResult | None = None
 
-        if commit_result.commits:
-            push_result = push_remediation_branch(
-                repo_path=repo_path,
-                repo_url=repo_url,
-                branch_name=commit_result.branch,
-            )
-            if push_result.status == "success" and commit_result.branch:
-                pr_result = open_remediation_pull_request(
+        if apply_commits and commit_result.commits:
+            if push:
+                push_result = push_remediation_branch(
+                    repo_path=repo_path,
                     repo_url=repo_url,
                     branch_name=commit_result.branch,
-                    base_branch=branch,
-                    summary_markdown=remediation_result.summary_markdown,
-                    commits=commit_result.commits,
                 )
-            elif push_result.status == "skipped":
-                pr_result = PullRequestResult(status="skipped", reason=push_result.reason)
+            else:
+                push_result = PushResult(
+                    status="skipped",
+                    branch=commit_result.branch,
+                    reason="push disabled by configuration",
+                )
+
+            if create_pr:
+                if push_result.status == "success" and commit_result.branch:
+                    pr_result = open_remediation_pull_request(
+                        repo_url=repo_url,
+                        branch_name=commit_result.branch,
+                        base_branch=base_branch or branch,
+                        summary_markdown=remediation_result.summary_markdown,
+                        commits=commit_result.commits,
+                        pr_labels=pr_labels,
+                    )
+                elif push_result.status == "skipped":
+                    pr_result = PullRequestResult(status="skipped", reason=push_result.reason)
+            else:
+                pr_result = PullRequestResult(status="skipped", reason="pull request disabled by configuration")
 
         remediation_artifacts = _persist_remediation_artifacts(
             remediation_result.artifacts,
