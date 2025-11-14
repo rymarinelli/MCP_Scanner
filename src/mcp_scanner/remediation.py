@@ -15,7 +15,7 @@ def _default_patch_program() -> PatchSuggestionProgram:
     import os
 
     provider = os.getenv("MCP_LLM__PROVIDER", "").strip().lower()
-    model_name = os.getenv("MCP_LLM__MODEL", "01-ai/Yi-Coder-9B-Chat")
+    model_name = os.getenv("MCP_LLM__MODEL", "ise-uiuc/Magicoder-S-DS-6.7B")
 
     try:
         from common.config import get_settings

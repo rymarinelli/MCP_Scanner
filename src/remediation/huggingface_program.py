@@ -79,7 +79,7 @@ class HuggingFacePatchSuggestionProgram:
     def __init__(
         self,
         *,
-        model_name: str = "01-ai/Yi-Coder-9B-Chat",
+        model_name: str = "ise-uiuc/Magicoder-S-DS-6.7B",
         instructions: str | None = None,
         client=None,
     ) -> None:

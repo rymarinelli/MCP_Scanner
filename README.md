@@ -65,12 +65,12 @@ variables.
 
 The remediation pipeline can run entirely on CPU by enabling the local
 Hugging Face integration. Set the following environment variables to make the
-service load the `01-ai/Yi-Coder-9B-Chat` model (or another compatible coding
-model) via the Transformers library:
+service load the `ise-uiuc/Magicoder-S-DS-6.7B` model (or another compatible
+coding model) via the Transformers library:
 
 ```bash
 export MCP_LLM__PROVIDER=huggingface
-export MCP_LLM__MODEL=01-ai/Yi-Coder-9B-Chat
+export MCP_LLM__MODEL=ise-uiuc/Magicoder-S-DS-6.7B
 ```
 
 When these settings are active, the remediation suggester streams prompts to
