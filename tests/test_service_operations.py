@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any, Dict
 
 import json
+import subprocess
 import pytest
 
 import sys
@@ -17,12 +18,17 @@ if str(PROJECT_ROOT) not in sys.path:
 from semgrep_runner import RunnerOutput
 
 from service.operations import (
+    CommitApplicationResult,
+    RemediationOutcome,
     ScanExecutionError,
+    apply_remediation_commits,
     clone_repository,
     generate_remediations,
     perform_scan,
     run_semgrep_scan,
 )
+
+from mcp_scanner.models import PatchProposal
 
 
 class DummyCompletedProcess:
@@ -106,9 +112,17 @@ def test_generate_remediations_creates_summary(tmp_path: Path) -> None:
     rag_context_path = tmp_path / "rag_context.json"
     rag_context_path.write_text(json.dumps({"graph": {"nodes": {}, "edges": []}, "node_context": {}}))
 
-    payload = generate_remediations(output, tmp_path, rag_context_path)
-    assert payload["proposals"] == []
-    assert "No remediation suggestions" in payload["summary_markdown"]
+    result = generate_remediations(output, tmp_path, rag_context_path)
+    assert isinstance(result, RemediationOutcome)
+    assert result.proposals == []
+    assert "No remediation suggestions" in result.summary_markdown
+    serialized = result.to_dict()
+    assert serialized["proposals"] == []
+    assert "artifacts" in serialized
+    artifacts = serialized["artifacts"]
+    assert "semgrep_results" in artifacts
+    assert artifacts["semgrep_results"].endswith("semgrep_results.json")
+    assert "dspy_summary" in artifacts
 
 
 def test_perform_scan_happy_path(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -132,19 +146,52 @@ def test_perform_scan_happy_path(monkeypatch: pytest.MonkeyPatch) -> None:
     def fake_enumeration(repo_path, workspace):  # type: ignore[no-redef]
         dummy_path = workspace / "rag_context.json"
         dummy_path.write_text("{}")
-        return {"rag_context": {}}, dummy_path
+        rag_dir = workspace / "rag"
+        rag_dir.mkdir()
+        raw_graph = rag_dir / "raw_graph.json"
+        raw_graph.write_text("{}")
+        graph_html = rag_dir / "rag_graph.html"
+        graph_html.write_text("<html></html>")
+        payload = {
+            "rag_context": {},
+            "artifacts": {
+                "raw_graph": str(raw_graph),
+                "graph_html": str(graph_html),
+                "rag_context": str(dummy_path),
+            },
+        }
+        artifact_paths = {
+            "raw_graph": raw_graph,
+            "graph_html": graph_html,
+            "rag_context": dummy_path,
+        }
+        return payload, dummy_path, artifact_paths
 
     def fake_remediation(output, workspace, rag_context_path):  # type: ignore[no-redef]
-        return {"proposals": [], "summary_markdown": "report"}
+        return RemediationOutcome(proposals=[], summary_markdown="report", artifacts={})
+
+    def fake_apply(repo_path, proposals):  # type: ignore[no-redef]
+        assert proposals == []
+        return CommitApplicationResult(branch="mcp/remediation-demo", commits=[], errors=[])
+
+    def fail_push(*args, **kwargs):  # type: ignore[no-redef]
+        raise AssertionError("push should not be invoked when no commits are produced")
+
+    def fail_pr(*args, **kwargs):  # type: ignore[no-redef]
+        raise AssertionError("pull request should not be attempted when no commits exist")
 
     monkeypatch.setattr("service.operations.clone_repository", fake_clone)
     monkeypatch.setattr("service.operations.enumerate_repository", fake_enumeration)
     monkeypatch.setattr("service.operations.run_semgrep_scan", fake_semgrep)
     monkeypatch.setattr("service.operations.generate_remediations", fake_remediation)
+    monkeypatch.setattr("service.operations.apply_remediation_commits", fake_apply)
+    monkeypatch.setattr("service.operations.push_remediation_branch", fail_push)
+    monkeypatch.setattr("service.operations.open_remediation_pull_request", fail_pr)
 
     result = perform_scan(repo_url="https://example.com/demo.git", branch="main")
     assert result["repository"]["url"] == "https://example.com/demo.git"
     assert result["remediation"]["proposals"] == []
+    assert result["remediation"]["summary_markdown"] == "report"
     assert result["enumeration"]["rag_context"] == {}
 
 
@@ -156,4 +203,54 @@ def test_perform_scan_rejects_option_like_repo_url(monkeypatch: pytest.MonkeyPat
 def test_perform_scan_rejects_option_like_branch(monkeypatch: pytest.MonkeyPatch) -> None:
     with pytest.raises(ValueError, match="branch must not start with '-'"):
         perform_scan(repo_url="https://example.com/demo.git", branch="-bad")
+
+
+def _init_git_repo(path: Path) -> Path:
+    repo = path / "repo"
+    repo.mkdir()
+    subprocess.run(["git", "init"], cwd=repo, check=True, capture_output=True, text=True)
+    subprocess.run(["git", "config", "user.email", "tester@example.com"], cwd=repo, check=True, capture_output=True, text=True)
+    subprocess.run(["git", "config", "user.name", "Tester"], cwd=repo, check=True, capture_output=True, text=True)
+    (repo / "app.py").write_text("print('hello')\n", encoding="utf-8")
+    subprocess.run(["git", "add", "app.py"], cwd=repo, check=True, capture_output=True, text=True)
+    subprocess.run(["git", "commit", "-m", "initial"], cwd=repo, check=True, capture_output=True, text=True)
+    return repo
+
+
+def test_apply_remediation_commits_creates_commits(tmp_path: Path) -> None:
+    repo = _init_git_repo(tmp_path)
+    patch = """diff --git a/app.py b/app.py\n--- a/app.py\n+++ b/app.py\n@@ -1 +1,2 @@\n-print('hello')\n+print('hello')\n+print('secure')\n"""
+    proposal = PatchProposal(
+        vulnerability_id="vuln-1",
+        file_path="app.py",
+        diff=patch,
+        rationale="",
+        confidence=0.9,
+    )
+
+    result = apply_remediation_commits(repo, [proposal])
+    assert result.branch is not None
+    assert len(result.commits) == 1
+    assert not result.errors
+    commit = result.commits[0]
+    assert commit.vulnerability_id == "vuln-1"
+    assert commit.commit_sha
+    assert "print('secure')" in (repo / "app.py").read_text(encoding="utf-8")
+
+
+def test_apply_remediation_commits_handles_failed_patch(tmp_path: Path) -> None:
+    repo = _init_git_repo(tmp_path)
+    proposal = PatchProposal(
+        vulnerability_id="vuln-bad",
+        file_path="app.py",
+        diff="this is not a diff",
+        rationale="",
+        confidence=0.0,
+    )
+
+    result = apply_remediation_commits(repo, [proposal])
+    assert result.commits == []
+    assert result.errors
+    assert result.errors[0].vulnerability_id == "vuln-bad"
+    assert "secure" not in (repo / "app.py").read_text(encoding="utf-8")
 

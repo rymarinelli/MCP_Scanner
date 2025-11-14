@@ -47,6 +47,35 @@ src/
 └── scanners/      # Repository scanner interfaces
 ```
 
+## Automated scan pipeline
+
+The HTTP service drives a multi-stage remediation workflow designed to mirror
+the process you described:
+
+1. **Enumerate the repository architecture.** The `enumeration` package walks
+   the target repository, builds a property graph, and materializes both a JSON
+   context file and an interactive HTML visualization. These artifacts are
+   emitted in the scan response under `enumeration.artifacts`.
+2. **Correlate Semgrep findings with the graph RAG.** Semgrep runs with the
+   bundled ruleset and its JSON results are enriched using
+   `graph.enrichers.correlate_semgrep_findings`, which injects the surrounding
+   node metadata, code snippets, and relationship information from the RAG.
+3. **Generate DSPy remediation scripts.** The enriched findings feed the DSPy
+   remediation driver. The driver writes a Markdown playbook summarizing the
+   proposed patches and persists per-vulnerability JSON payloads containing the
+   DSPy outputs. The scan response surfaces durable paths to these files under
+   `remediation.artifacts` (for example, `dspy_summary.md` and the
+   `dspy_cases/` directory).
+4. **Apply fixes and create commits.** Patch proposals are grouped by
+   vulnerability and applied one commit at a time. Each successful commit uses a
+   descriptive message (`fix(<vulnerability_id>): ...`). If a GitHub token is
+   configured the service pushes the remediation branch and opens a pull
+   request that links to every commit.
+
+Every stage leaves behind stabilized artifacts in the response payload so that
+you can review the RAG graph, Semgrep JSON, DSPy script, and remediation branch
+after the scan completes.
+
 ## Loading configuration
 
 Pydantic settings are used to centralize runtime configuration:
