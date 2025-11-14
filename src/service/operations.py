@@ -6,10 +6,13 @@ import json
 import subprocess
 import tempfile
 from pathlib import Path
-from typing import Dict, List, Mapping, MutableMapping, Optional
+from typing import Dict, List, Mapping, MutableMapping, Optional, Tuple
 
+from enumeration.collector import RepositoryCollector, write_graph
+from enumeration.context import build_rag_context, write_rag_context
 from mcp_scanner.remediation import RemediationSuggester
 from remediation.dspy_driver import DSPyRemediationDriver
+from visualization.rag_graph import write_html as write_rag_html
 
 from semgrep_runner import (
     RunnerOutput,
@@ -87,7 +90,45 @@ def _ensure_mapping(payload: Mapping[str, object]) -> Dict[str, object]:
     return dict(payload)
 
 
-def generate_remediations(semgrep_output: RunnerOutput, workspace: Path) -> Dict[str, object]:
+def enumerate_repository(repo_path: Path, workspace: Path) -> Tuple[Dict[str, object], Path]:
+    """Build RAG artifacts describing ``repo_path``."""
+
+    collector = RepositoryCollector(repo_path)
+    artifact = collector.collect()
+
+    rag_dir = workspace / "rag"
+    raw_graph_path = rag_dir / "raw_graph.json"
+    write_graph(artifact, raw_graph_path)
+
+    graph_payload = artifact.to_dict()
+    graph_html_path = rag_dir / "rag_graph.html"
+    write_rag_html(graph_payload, graph_html_path)
+
+    rag_context = build_rag_context(artifact)
+    rag_context_path = workspace / "rag_context.json"
+    write_rag_context(rag_context, rag_context_path)
+
+    enumeration_payload = {
+        "graph": {
+            "node_count": len(graph_payload.get("nodes", [])),
+            "edge_count": len(graph_payload.get("edges", [])),
+        },
+        "artifacts": {
+            "raw_graph": str(raw_graph_path),
+            "graph_html": str(graph_html_path),
+            "rag_context": str(rag_context_path),
+        },
+        "rag_context": rag_context,
+    }
+
+    return enumeration_payload, rag_context_path
+
+
+def generate_remediations(
+    semgrep_output: RunnerOutput,
+    workspace: Path,
+    rag_context_path: Path,
+) -> Dict[str, object]:
     """Generate remediation proposals from Semgrep findings."""
 
     semgrep_results = semgrep_output.results
@@ -105,7 +146,7 @@ def generate_remediations(semgrep_output: RunnerOutput, workspace: Path) -> Dict
 
     proposals = driver.run(
         semgrep_path=findings_path,
-        rag_context_path=workspace / "rag_context.json",
+        rag_context_path=rag_context_path,
     )
 
     summary_markdown = driver.output_markdown.read_text(encoding="utf-8")
@@ -123,6 +164,7 @@ def perform_scan(*, repo_url: str, branch: str | None = None) -> Dict[str, objec
     with tempfile.TemporaryDirectory(prefix="mcp-scan-") as tmpdir:
         workspace = Path(tmpdir)
         repo_path = clone_repository(repo_url, branch, workspace)
+        enumeration_payload, rag_context_path = enumerate_repository(repo_path, workspace)
         semgrep_output = run_semgrep_scan(repo_path)
 
         semgrep_payload = semgrep_output.to_dict()
@@ -131,13 +173,14 @@ def perform_scan(*, repo_url: str, branch: str | None = None) -> Dict[str, objec
                 "Semgrep execution failed",
             )
 
-        remediation_payload = generate_remediations(semgrep_output, workspace)
+        remediation_payload = generate_remediations(semgrep_output, workspace, rag_context_path)
 
         return {
             "repository": {
                 "url": repo_url,
                 "branch": branch,
             },
+            "enumeration": enumeration_payload,
             "semgrep": semgrep_payload,
             "remediation": remediation_payload,
         }
