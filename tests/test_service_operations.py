@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Dict
 
+import json
 import pytest
 
 import sys
@@ -102,7 +103,10 @@ def test_generate_remediations_creates_summary(tmp_path: Path) -> None:
         stderr=None,
     )
 
-    payload = generate_remediations(output, tmp_path)
+    rag_context_path = tmp_path / "rag_context.json"
+    rag_context_path.write_text(json.dumps({"graph": {"nodes": {}, "edges": []}, "node_context": {}}))
+
+    payload = generate_remediations(output, tmp_path, rag_context_path)
     assert payload["proposals"] == []
     assert "No remediation suggestions" in payload["summary_markdown"]
 
@@ -125,16 +129,23 @@ def test_perform_scan_happy_path(monkeypatch: pytest.MonkeyPatch) -> None:
     def fake_semgrep(path):  # type: ignore[no-redef]
         return fake_output
 
-    def fake_remediation(output, workspace):  # type: ignore[no-redef]
+    def fake_enumeration(repo_path, workspace):  # type: ignore[no-redef]
+        dummy_path = workspace / "rag_context.json"
+        dummy_path.write_text("{}")
+        return {"rag_context": {}}, dummy_path
+
+    def fake_remediation(output, workspace, rag_context_path):  # type: ignore[no-redef]
         return {"proposals": [], "summary_markdown": "report"}
 
     monkeypatch.setattr("service.operations.clone_repository", fake_clone)
+    monkeypatch.setattr("service.operations.enumerate_repository", fake_enumeration)
     monkeypatch.setattr("service.operations.run_semgrep_scan", fake_semgrep)
     monkeypatch.setattr("service.operations.generate_remediations", fake_remediation)
 
     result = perform_scan(repo_url="https://example.com/demo.git", branch="main")
     assert result["repository"]["url"] == "https://example.com/demo.git"
     assert result["remediation"]["proposals"] == []
+    assert result["enumeration"]["rag_context"] == {}
 
 
 def test_perform_scan_rejects_option_like_repo_url(monkeypatch: pytest.MonkeyPatch) -> None:

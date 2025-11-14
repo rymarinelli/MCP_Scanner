@@ -5,6 +5,7 @@ import argparse
 import ast
 import hashlib
 import json
+from textwrap import dedent
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Dict, Iterator, List, Optional, Sequence, Tuple
@@ -183,8 +184,13 @@ class RepositoryCollector:
         function_index: Dict[Tuple[str, str], str],
     ) -> Tuple[List[GraphNode], List[GraphEdge]]:
         try:
-            tree = ast.parse(path.read_text(encoding="utf-8"))
-        except (SyntaxError, UnicodeDecodeError):
+            source_text = path.read_text(encoding="utf-8")
+        except (UnicodeDecodeError, OSError):
+            return [], []
+
+        try:
+            tree = ast.parse(source_text)
+        except SyntaxError:
             return [], []
 
         relative = path.relative_to(self.root)
@@ -195,6 +201,11 @@ class RepositoryCollector:
         for func in [n for n in tree.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))]:
             function_id = f"{relative.as_posix()}::def::{func.name}:{func.lineno}"
             function_index[(module_name, func.name)] = function_id
+            docstring = ast.get_docstring(func) or ""
+            summary = docstring.strip().split("\n", 1)[0] if docstring.strip() else ""
+            raw_source = ast.get_source_segment(source_text, func) or ""
+            source_snippet = dedent(raw_source).strip("\n")
+            end_lineno = getattr(func, "end_lineno", None)
             nodes.append(
                 GraphNode(
                     id=function_id,
@@ -203,7 +214,10 @@ class RepositoryCollector:
                     properties={
                         "defined_in": relative.as_posix(),
                         "lineno": func.lineno,
-                        "docstring": ast.get_docstring(func) or "",
+                        "end_lineno": end_lineno,
+                        "docstring": docstring,
+                        "summary": summary,
+                        "source": source_snippet,
                         "async": isinstance(func, ast.AsyncFunctionDef),
                     },
                 )
