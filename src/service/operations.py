@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
+import shlex
+import shutil
 import subprocess
 import tempfile
-import shutil
 import uuid
 import urllib.error
 import urllib.request
@@ -31,6 +33,47 @@ from semgrep_runner import (
     interpret_result,
     load_config,
 )
+
+
+LOGGER = logging.getLogger("mcp_scanner.service.operations")
+
+
+def _format_command(command: Sequence[str]) -> str:
+    """Return a shell-quoted representation of ``command`` for logging."""
+
+    return " ".join(shlex.quote(part) for part in command)
+
+
+def _log_multiline(header: str, content: str | None) -> None:
+    """Emit a multi-line INFO log with ``header`` and ``content``."""
+
+    if not content:
+        LOGGER.info("%s: <empty>", header)
+        return
+    LOGGER.info("%s:\n%s", header, content)
+
+
+def _json_for_logging(payload: object) -> str:
+    """Serialize ``payload`` for logging, falling back to ``repr`` if needed."""
+
+    try:
+        return json.dumps(payload, indent=2, sort_keys=True)
+    except TypeError:
+        return repr(payload)
+
+
+def _sanitize_remote(remote_url: str | None) -> str:
+    """Scrub authentication tokens from remote URLs before logging."""
+
+    if not remote_url:
+        return ""
+    if "@" not in remote_url:
+        return remote_url
+    prefix, suffix = remote_url.split("@", 1)
+    if ":" in prefix:
+        username, _ = prefix.split(":", 1)
+        return f"{username}:***@{suffix}"
+    return f"***@{suffix}"
 
 
 class ScanExecutionError(RuntimeError):
@@ -221,11 +264,19 @@ def clone_repository(repo_url: str, branch: str | None, workspace: Path) -> Path
         command.extend(["--branch", branch])
     command.extend([repo_url, str(repo_dir)])
 
+    LOGGER.info(
+        "Cloning repository %s (branch=%s) into %s",
+        repo_url,
+        branch or "default",
+        repo_dir,
+    )
+
     result = _run_subprocess(command)
     if result.returncode != 0:
         message = result.stderr.strip() or result.stdout.strip() or "Unknown git error"
         raise ScanExecutionError(f"git clone failed: {message}")
 
+    LOGGER.info("Repository cloned successfully to %s", repo_dir)
     return repo_dir
 
 
@@ -250,11 +301,24 @@ def run_semgrep_scan(repo_path: Path, *, quick: bool = False) -> RunnerOutput:
 
     def _invoke(selected_configs: Sequence[RunnerConfig]) -> RunnerOutput:
         command = build_command(selected_configs, targets=["."], base_dir=base_dir)
+        LOGGER.info("Running Semgrep (quick=%s): %s", quick, _format_command(command))
         result = execute_semgrep(command, cwd=repo_path)
         return interpret_result(result, command)
 
     output = _invoke(configs)
     if output.normalized_exit_code == 0:
+        LOGGER.info(
+            "Semgrep completed with exit=%s (normalized=%s, status=%s)",
+            output.semgrep_exit_code,
+            output.normalized_exit_code,
+            output.status,
+        )
+        findings = output.results.get("results", []) if isinstance(output.results, Mapping) else []
+        errors = output.results.get("errors", []) if isinstance(output.results, Mapping) else []
+        LOGGER.info(
+            "Semgrep reported %s findings and %s errors", len(findings), len(errors)
+        )
+        _log_multiline("Semgrep report", _json_for_logging(output.results))
         return output
 
     remote_configs = [cfg for cfg in configs if cfg.type in {"registry", "remote"}]
@@ -271,8 +335,40 @@ def run_semgrep_scan(repo_path: Path, *, quick: bool = False) -> RunnerOutput:
                     "original_exit_code": output.semgrep_exit_code,
                 }
             )
+            LOGGER.warning(
+                "Remote Semgrep configs failed; retried with local configs: %s",
+                ", ".join(skipped),
+            )
+            LOGGER.info(
+                "Semgrep completed with exit=%s (normalized=%s, status=%s)",
+                fallback.semgrep_exit_code,
+                fallback.normalized_exit_code,
+                fallback.status,
+            )
+            findings = (
+                fallback.results.get("results", [])
+                if isinstance(fallback.results, Mapping)
+                else []
+            )
+            errors = (
+                fallback.results.get("errors", [])
+                if isinstance(fallback.results, Mapping)
+                else []
+            )
+            LOGGER.info(
+                "Semgrep reported %s findings and %s errors", len(findings), len(errors)
+            )
+            _log_multiline("Semgrep report", _json_for_logging(fallback.results))
             return fallback
 
+    LOGGER.error(
+        "Semgrep failed with exit=%s (normalized=%s, status=%s)",
+        output.semgrep_exit_code,
+        output.normalized_exit_code,
+        output.status,
+    )
+    if isinstance(output.results, Mapping):
+        _log_multiline("Semgrep report", _json_for_logging(output.results))
     return output
 
 
@@ -323,6 +419,15 @@ def enumerate_repository(
         "rag_context": rag_context,
     }
 
+    LOGGER.info(
+        "Repository enumeration complete: %s nodes, %s edges",
+        enumeration_payload["graph"]["node_count"],
+        enumeration_payload["graph"]["edge_count"],
+    )
+    LOGGER.info(
+        "RAG artifacts written: %s",
+        {key: str(path) for key, path in artifact_paths.items()},
+    )
     return enumeration_payload, rag_context_path, artifact_paths
 
 
@@ -363,6 +468,7 @@ def _persist_enumeration_artifacts(
         filename = f"{key}{suffix}" if suffix else key
         persisted_path = _copy_artifact(src, artifact_root / "enumeration", name=filename)
         persisted[key] = str(persisted_path)
+        LOGGER.info("Persisted enumeration artifact %s -> %s", key, persisted_path)
     return persisted
 
 
@@ -381,6 +487,7 @@ def _persist_remediation_artifacts(
             name = key
         persisted_path = _copy_artifact(src, artifact_root / "remediation", name=name)
         persisted[key] = str(persisted_path)
+        LOGGER.info("Persisted remediation artifact %s -> %s", key, persisted_path)
     return persisted
 
 
@@ -425,12 +532,14 @@ def apply_remediation_commits(
         return CommitApplicationResult(branch=None, commits=[], errors=[])
 
     branch_name = f"mcp/remediation-{uuid.uuid4().hex[:8]}"
+    LOGGER.info("Creating remediation branch %s", branch_name)
     checkout = _run_subprocess(["git", "checkout", "-b", branch_name], cwd=repo_path)
     if checkout.returncode != 0:
         message = checkout.stderr.strip() or checkout.stdout.strip() or "Unknown git error"
         raise ScanExecutionError(f"git checkout -b {branch_name} failed: {message}")
 
     _ensure_git_identity(repo_path)
+    LOGGER.info("Git identity configured for remediation commits")
 
     commits: List[CommitRecord] = []
     errors: List[CommitError] = []
@@ -438,11 +547,19 @@ def apply_remediation_commits(
         if not group:
             continue
 
+        LOGGER.info(
+            "Applying %s proposal(s) for vulnerability %s",
+            len(group),
+            vulnerability_id,
+        )
         apply_failed = False
         for proposal in group:
             patch_text = proposal.diff or ""
             if not patch_text.strip():
                 errors.append(CommitError(vulnerability_id=vulnerability_id, reason="empty_diff"))
+                LOGGER.warning(
+                    "Skipping proposal for %s due to empty diff", vulnerability_id
+                )
                 apply_failed = True
                 break
 
@@ -453,6 +570,11 @@ def apply_remediation_commits(
             )
             if apply_result.returncode != 0:
                 details = (apply_result.stderr or apply_result.stdout or "").strip()
+                LOGGER.error(
+                    "git apply failed for %s: %s",
+                    vulnerability_id,
+                    details or "unknown error",
+                )
                 errors.append(
                     CommitError(
                         vulnerability_id=vulnerability_id,
@@ -470,6 +592,7 @@ def apply_remediation_commits(
         add_result = _run_subprocess(["git", "add", "-A"], cwd=repo_path)
         if add_result.returncode != 0:
             details = (add_result.stderr or add_result.stdout or "").strip()
+            LOGGER.error("git add failed for %s: %s", vulnerability_id, details or "unknown error")
             errors.append(
                 CommitError(
                     vulnerability_id=vulnerability_id,
@@ -482,6 +605,7 @@ def apply_remediation_commits(
 
         status = _run_subprocess(["git", "status", "--porcelain"], cwd=repo_path)
         if not status.stdout.strip():
+            LOGGER.warning("No staged changes for %s; skipping commit", vulnerability_id)
             errors.append(
                 CommitError(
                     vulnerability_id=vulnerability_id,
@@ -494,6 +618,9 @@ def apply_remediation_commits(
         commit_result = _run_subprocess(["git", "commit", "-m", message], cwd=repo_path)
         if commit_result.returncode != 0:
             details = (commit_result.stderr or commit_result.stdout or "").strip()
+            LOGGER.error(
+                "git commit failed for %s: %s", vulnerability_id, details or "unknown error"
+            )
             errors.append(
                 CommitError(
                     vulnerability_id=vulnerability_id,
@@ -513,6 +640,9 @@ def apply_remediation_commits(
                 message=message,
                 proposals=list(group),
             )
+        )
+        LOGGER.info(
+            "Created commit %s for %s", commit_sha[:7] if commit_sha else "<unknown>", vulnerability_id
         )
 
     return CommitApplicationResult(branch=branch_name, commits=commits, errors=errors)
@@ -614,22 +744,41 @@ def push_remediation_branch(
 
     token = token if token is not None else os.environ.get("GITHUB_TOKEN")
     if not token:
+        LOGGER.warning("Skipping push for %s: no GITHUB_TOKEN provided", branch_name)
         return PushResult(status="skipped", branch=branch_name, reason="GITHUB_TOKEN not provided")
 
     remote_variants = _authenticated_remote_candidates(repo_url, token)
     if not remote_variants:
         remote_variants = [None]
 
+    LOGGER.info(
+        "Attempting to push remediation branch %s (remote candidates=%s)",
+        branch_name,
+        [
+            _sanitize_remote(variant)
+            if variant is not None
+            else "origin"
+            for variant in remote_variants
+        ],
+    )
     errors: List[str] = []
     for remote_url in remote_variants:
         if remote_url:
             _run_subprocess(["git", "remote", "set-url", "origin", remote_url], cwd=repo_path)
+            LOGGER.info("Configured remote origin as %s", _sanitize_remote(remote_url))
 
         push = _run_subprocess(["git", "push", "--set-upstream", "origin", branch_name], cwd=repo_path)
         if push.returncode == 0:
+            LOGGER.info("Successfully pushed branch %s to origin", branch_name)
             return PushResult(status="success", branch=branch_name, remote="origin", message="Branch pushed to origin")
 
         message = push.stderr.strip() or push.stdout.strip() or "Unknown git error"
+        LOGGER.warning(
+            "git push failed for branch %s via %s: %s",
+            branch_name,
+            _sanitize_remote(remote_url) if remote_url else "origin",
+            message,
+        )
         errors.append(message)
 
     error_message = errors[-1] if errors else "Unknown git error"
@@ -637,6 +786,12 @@ def push_remediation_branch(
     if len(errors) > 1:
         reason = "git push failed after attempting multiple credential formats"
 
+    LOGGER.error(
+        "git push failed for branch %s after %s attempt(s): %s",
+        branch_name,
+        len(remote_variants),
+        error_message,
+    )
     return PushResult(
         status="error",
         branch=branch_name,
@@ -659,14 +814,17 @@ def open_remediation_pull_request(
     """Open a pull request summarizing the remediation commits."""
 
     if not commits:
+        LOGGER.warning("Skipping pull request creation: no commits available")
         return PullRequestResult(status="skipped", reason="no commits to include")
 
     token = token if token is not None else os.environ.get("GITHUB_TOKEN")
     if not token:
+        LOGGER.warning("Skipping pull request creation: no GITHUB_TOKEN provided")
         return PullRequestResult(status="skipped", reason="GITHUB_TOKEN not provided")
 
     slug = _parse_repo_slug(repo_url)
     if not slug:
+        LOGGER.error("Unable to parse repository slug from repo_url: %s", repo_url)
         return PullRequestResult(status="error", error="Unable to parse repository slug from repo_url")
 
     owner, repo = slug
@@ -703,17 +861,32 @@ def open_remediation_pull_request(
     request.add_header("Accept", "application/vnd.github+json")
     request.add_header("Content-Type", "application/json")
 
+    LOGGER.info(
+        "Creating pull request against %s/%s: title=%s, head=%s, base=%s",
+        owner,
+        repo,
+        title,
+        branch_name,
+        base_branch or "main",
+    )
+
     try:
         with urllib.request.urlopen(request) as response:
             data = json.loads(response.read().decode("utf-8"))
     except urllib.error.HTTPError as exc:  # pragma: no cover - requires HTTP interaction
         error_body = exc.read().decode("utf-8", errors="ignore")
+        LOGGER.error(
+            "GitHub API returned %s while creating pull request: %s",
+            exc.code,
+            error_body,
+        )
         return PullRequestResult(
             status="error",
             error=f"GitHub API returned {exc.code}",
             response={"body": error_body},
         )
     except Exception as exc:  # pragma: no cover - defensive guard
+        LOGGER.exception("Unexpected error while creating pull request")
         return PullRequestResult(status="error", error=str(exc))
 
     labels_result: Dict[str, Any] | None = None
@@ -721,6 +894,7 @@ def open_remediation_pull_request(
         issue_number = data.get("number")
         if issue_number is None:
             labels_result = {"status": "skipped", "reason": "missing pull request number"}
+            LOGGER.warning("Skipping label application: missing pull request number in response")
         else:
             labels_url = f"https://api.github.com/repos/{owner}/{repo}/issues/{issue_number}/labels"
             payload = json.dumps({"labels": list(pr_labels)}).encode("utf-8")
@@ -734,16 +908,30 @@ def open_remediation_pull_request(
                         "status": "success",
                         "response": json.loads(response.read().decode("utf-8")),
                     }
+                    LOGGER.info(
+                        "Applied labels %s to pull request #%s", list(pr_labels), issue_number
+                    )
             except urllib.error.HTTPError as exc:  # pragma: no cover - requires HTTP interaction
                 error_body = exc.read().decode("utf-8", errors="ignore")
+                LOGGER.error(
+                    "GitHub API returned %s while applying labels: %s",
+                    exc.code,
+                    error_body,
+                )
                 labels_result = {
                     "status": "error",
                     "error": f"GitHub API returned {exc.code}",
                     "body": error_body,
                 }
             except Exception as exc:  # pragma: no cover - defensive guard
+                LOGGER.exception("Unexpected error while applying labels")
                 labels_result = {"status": "error", "error": str(exc)}
 
+    LOGGER.info(
+        "Pull request created: %s (number=%s)",
+        data.get("html_url"),
+        data.get("number"),
+    )
     return PullRequestResult(
         status="success",
         url=data.get("html_url"),
@@ -784,6 +972,11 @@ def _invoke_pull_request_tool(
         return None
 
     ensure_tools_registered()
+    LOGGER.info(
+        "Invoking open_pull_request tool for branch %s (base=%s)",
+        branch_name,
+        base_branch,
+    )
 
     response = run_tool(
         "open_pull_request",
@@ -799,18 +992,29 @@ def _invoke_pull_request_tool(
     )
 
     status = response.get("status")
+    LOGGER.info("open_pull_request tool returned transport status=%s", status)
     if status != "success":
         error = response.get("error")
         if isinstance(error, Mapping) and error.get("type") == "ToolNotFound":
+            LOGGER.warning("open_pull_request tool not found in registry")
             return None
+        LOGGER.error("open_pull_request tool invocation failed: %s", _describe_tool_error(error))
         return PullRequestResult(status="error", error=_describe_tool_error(error))
 
     payload = response.get("result")
     if not isinstance(payload, Mapping):
+        LOGGER.error("open_pull_request tool returned malformed payload: %s", response)
         return PullRequestResult(status="error", error="open_pull_request returned malformed payload")
 
     try:
-        return PullRequestResult.from_mapping(payload)
+        result = PullRequestResult.from_mapping(payload)
+        LOGGER.info(
+            "open_pull_request tool result: status=%s url=%s number=%s",
+            result.status,
+            result.url,
+            result.number,
+        )
+        return result
     except ValueError as exc:
         return PullRequestResult(status="error", error=str(exc))
 
@@ -829,19 +1033,28 @@ def generate_remediations(
 
     findings_path = workspace / "semgrep_results.json"
     findings_path.write_text(json.dumps(_ensure_mapping(semgrep_results), indent=2))
+    LOGGER.info("Semgrep findings saved to %s", findings_path)
 
     suggester = RemediationSuggester(output_dir=workspace / "remediations")
+    LOGGER.info(
+        "Initializing DSPy remediation driver (output_markdown=%s)",
+        workspace / "dspy_suggestions.md",
+    )
     driver = DSPyRemediationDriver(
         suggester=suggester,
         output_markdown=workspace / "dspy_suggestions.md",
     )
 
+    LOGGER.info("Starting DSPy remediation generation")
     proposals = driver.run(
         semgrep_path=findings_path,
         rag_context_path=rag_context_path,
     )
+    LOGGER.info("DSPy remediation generation complete (%s proposals)", len(proposals))
 
     summary_markdown = driver.output_markdown.read_text(encoding="utf-8")
+    LOGGER.info("DSPy summary written to %s", driver.output_markdown)
+    _log_multiline("DSPy summary", summary_markdown)
 
     artifacts: Dict[str, Path] = {
         "semgrep_results": findings_path,
@@ -850,6 +1063,16 @@ def generate_remediations(
     remediation_dir = driver.suggester.output_dir
     if isinstance(remediation_dir, Path) and remediation_dir.exists():
         artifacts["dspy_cases"] = remediation_dir
+        LOGGER.info("DSPy remediation cases written to %s", remediation_dir)
+
+    for proposal in proposals:
+        header = f"DSPy proposal {proposal.vulnerability_id} ({proposal.file_path})"
+        diff = proposal.diff.strip() if proposal.diff else ""
+        _log_multiline(header, diff or "<empty diff>")
+        if proposal.rationale:
+            _log_multiline(
+                f"DSPy rationale {proposal.vulnerability_id}", proposal.rationale.strip()
+            )
 
     return RemediationOutcome(
         proposals=proposals,
@@ -874,15 +1097,31 @@ def perform_scan(
 
     _validate_repo_inputs(repo_url, branch)
 
+    LOGGER.info(
+        "Starting scan: repo=%s branch=%s quick=%s apply_commits=%s push=%s create_pr=%s",
+        repo_url,
+        branch or "default",
+        quick,
+        apply_commits,
+        push,
+        create_pr,
+    )
+
     if github_token is None:
         github_token = os.environ.get("GITHUB_TOKEN")
+        if github_token:
+            LOGGER.info("Using GitHub token from environment for authentication")
+        else:
+            LOGGER.warning("GitHub token not provided; push/PR steps may be skipped")
 
     artifact_root = Path(tempfile.mkdtemp(prefix="mcp-scan-artifacts-"))
+    LOGGER.info("Artifacts will be persisted under %s", artifact_root)
 
     with tempfile.TemporaryDirectory(prefix="mcp-scan-") as tmpdir:
         workspace = Path(tmpdir)
         repo_path = clone_repository(repo_url, branch, workspace)
         enumeration_payload, rag_context_path, artifact_paths = enumerate_repository(repo_path, workspace)
+        LOGGER.info("Repository cloned to %s; RAG context at %s", repo_path, rag_context_path)
         semgrep_output = run_semgrep_scan(repo_path, quick=quick)
 
         semgrep_payload = semgrep_output.to_dict()
@@ -890,6 +1129,7 @@ def perform_scan(
             raise ScanExecutionError(
                 "Semgrep execution failed",
             )
+        LOGGER.info("Semgrep scan completed successfully")
 
         remediation_result = generate_remediations(
             semgrep_output,
@@ -897,11 +1137,20 @@ def perform_scan(
             rag_context_path,
             repo_path,
         )
+        LOGGER.info(
+            "Generated %s remediation proposal(s)", len(remediation_result.proposals)
+        )
 
         if apply_commits:
             commit_result = apply_remediation_commits(repo_path, remediation_result.proposals)
         else:
             commit_result = CommitApplicationResult(branch=None, commits=[], errors=[])
+        LOGGER.info(
+            "Commit application result: branch=%s commits=%s errors=%s",
+            commit_result.branch,
+            len(commit_result.commits),
+            len(commit_result.errors),
+        )
 
         push_result: PushResult | None = None
         pr_result: PullRequestResult | None = None
@@ -920,6 +1169,9 @@ def perform_scan(
                     branch=commit_result.branch,
                     reason="push disabled by configuration",
                 )
+            LOGGER.info(
+                "Push result: %s", push_result.to_dict() if push_result else {"status": "unknown"}
+            )
 
             if create_pr:
                 if push_result.status == "success" and commit_result.branch:
@@ -955,6 +1207,8 @@ def perform_scan(
                     )
             else:
                 pr_result = PullRequestResult(status="skipped", reason="pull request disabled by configuration")
+            if pr_result:
+                LOGGER.info("Pull request result: %s", pr_result.to_dict())
         else:
             if apply_commits:
                 if commit_result.branch and not commit_result.commits:
@@ -979,6 +1233,10 @@ def perform_scan(
                         status="skipped",
                         reason="apply_commits disabled by configuration",
                     )
+            if push_result:
+                LOGGER.info("Push result: %s", push_result.to_dict())
+            if create_pr and pr_result:
+                LOGGER.info("Pull request result: %s", pr_result.to_dict())
 
         remediation_artifacts = _persist_remediation_artifacts(
             remediation_result.artifacts,
@@ -1001,6 +1259,7 @@ def perform_scan(
 
         enumeration_payload["artifacts"] = _persist_enumeration_artifacts(artifact_paths, artifact_root)
 
+        LOGGER.info("Scan complete; results ready for response")
         return {
             "repository": {
                 "url": repo_url,
