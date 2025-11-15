@@ -1148,7 +1148,7 @@ def generate_remediations(
     findings_path.write_text(json.dumps(_ensure_mapping(semgrep_results), indent=2))
     LOGGER.info("Semgrep findings saved to %s", findings_path)
 
-    suggester = RemediationSuggester(output_dir=workspace / "remediations")
+    suggester = RemediationSuggester(output_dir=workspace / "remediations", repo_root=repo_path)
     LOGGER.info(
         "Initializing DSPy remediation driver (output_markdown=%s)",
         workspace / "dspy_suggestions.md",
