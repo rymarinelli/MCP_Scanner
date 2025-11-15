@@ -233,69 +233,6 @@ def test_generate_remediations_creates_summary(tmp_path: Path) -> None:
     assert "dspy_summary" in artifacts
 
 
-@pytest.mark.parametrize(
-    "check_id",
-    [
-        "semgrep_rules.custom.python-sql-injection-string-concat",
-        "python.flask.security.injection.tainted-sql-string.tainted-sql-string",
-        "python.django.security.injection.sql.sql-injection-using-db-cursor-execute.sql-injection-db-cursor-execute",
-    ],
-)
-def test_generate_remediations_adds_builtin_sql_patch(tmp_path: Path, check_id: str) -> None:
-    workspace = tmp_path / "workspace"
-    workspace.mkdir()
-    repo_path = tmp_path / "repo"
-    repo_path.mkdir()
-
-    vulnerable_source = """
-from flask import Flask
-
-def search():
-    q = "demo"
-    if q:
-        db = object()
-        cur = db.cursor()
-        # ---- VULNERABLE: concatenating user input into SQL ----
-        sql = "SELECT id, username FROM users WHERE username LIKE '%" + q + "%';"
-        # For the demo we intentionally execute this unsafe SQL
-        cur.execute(sql)
-        results = cur.fetchall()
-
-
-def login():
-    username = "user"
-    password = "pass"
-    db = object()
-    cur = db.cursor()
-    # ---- VULNERABLE: direct string formatting into SQL ----
-    sql = f"SELECT id, username FROM users WHERE username = '{username}' AND password = '{password}' LIMIT 1;"
-    cur.execute(sql)
-    row = cur.fetchone()
-    return row
-""".strip()
-
-    (repo_path / "app_vuln.py").write_text(vulnerable_source + "\n", encoding="utf-8")
-
-    rag_context_path = workspace / "rag_context.json"
-    rag_context_path.write_text(json.dumps({"graph": {"nodes": {}, "edges": []}, "node_context": {}}))
-
-    output = RunnerOutput(
-        status="ok",
-        normalized_exit_code=0,
-        semgrep_exit_code=0,
-        command=["semgrep"],
-        results={"results": [{"check_id": check_id, "path": "app_vuln.py"}]},
-        stderr=None,
-    )
-
-    result = generate_remediations(output, workspace, rag_context_path, repo_path)
-    assert any(
-        proposal.file_path == "app_vuln.py"
-        and "SELECT id, username FROM users WHERE username LIKE ?" in proposal.diff
-        for proposal in result.proposals
-    )
-
-
 def test_perform_scan_happy_path(monkeypatch: pytest.MonkeyPatch) -> None:
     def fake_clone(repo_url, branch, workspace):  # type: ignore[no-redef]
         path = workspace / "repo"

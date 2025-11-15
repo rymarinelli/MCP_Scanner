@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import difflib
 import json
 import os
 import subprocess
@@ -383,100 +382,6 @@ def _persist_remediation_artifacts(
         persisted_path = _copy_artifact(src, artifact_root / "remediation", name=name)
         persisted[key] = str(persisted_path)
     return persisted
-
-
-_SQL_CONCAT_RULE_IDENTIFIERS = (
-    "python-sql-injection-string-concat",
-    "python.flask.security.injection.tainted-sql-string.tainted-sql-string",
-    "python.django.security.injection.sql.sql-injection-using-db-cursor-execute.sql-injection-db-cursor-execute",
-)
-
-
-def _matches_sql_concat_rule(check_id: object) -> bool:
-    value = str(check_id or "")
-    if not value:
-        return False
-    return any(value == identifier or value.endswith(identifier) for identifier in _SQL_CONCAT_RULE_IDENTIFIERS)
-
-
-def _replace_sql_injection_blocks(text: str) -> tuple[str, bool]:
-    replacements = [
-        (
-            "        # ---- VULNERABLE: concatenating user input into SQL ----\n"
-            "        sql = \"SELECT id, username FROM users WHERE username LIKE '%\" + q + \"%';\"\n"
-            "        # For the demo we intentionally execute this unsafe SQL\n"
-            "        cur.execute(sql)\n",
-            "        # ---- FIXED: use parameterized query for user search ----\n"
-            "        sql = \"SELECT id, username FROM users WHERE username LIKE ?\"\n"
-            "        cur.execute(sql, (f\"%{q}%\",))\n",
-        ),
-        (
-            "        # ---- VULNERABLE: direct string formatting into SQL ----\n"
-            "        sql = f\"SELECT id, username FROM users WHERE username = '{username}' AND password = '{password}' LIMIT 1;\"\n"
-            "        cur.execute(sql)\n",
-            "        # ---- FIXED: use parameterized query for login ----\n"
-            "        sql = \"SELECT id, username FROM users WHERE username = ? AND password = ? LIMIT 1\"\n"
-            "        cur.execute(sql, (username, password))\n",
-        ),
-    ]
-
-    updated = text
-    changed = False
-    for original, replacement in replacements:
-        if original in updated:
-            updated = updated.replace(original, replacement)
-            changed = True
-    return updated, changed
-
-
-def _synthesize_sql_concatenation_patch(repo_path: Path) -> PatchProposal | None:
-    target = repo_path / "app_vuln.py"
-    if not target.exists():
-        return None
-
-    original = target.read_text(encoding="utf-8")
-    updated, changed = _replace_sql_injection_blocks(original)
-    if not changed:
-        return None
-
-    diff = "".join(
-        difflib.unified_diff(
-            original.splitlines(keepends=True),
-            updated.splitlines(keepends=True),
-            fromfile="a/app_vuln.py",
-            tofile="b/app_vuln.py",
-        )
-    )
-    if not diff.strip():
-        return None
-
-    return PatchProposal(
-        vulnerability_id="sql-injection-string-concat",
-        file_path="app_vuln.py",
-        diff=diff,
-        rationale=(
-            "Replace raw SQL queries built via string concatenation with parameterized statements to"
-            " prevent injection."
-        ),
-        confidence=1.0,
-    )
-
-
-def _builtin_remediations(
-    semgrep_results: Mapping[str, object], repo_path: Path
-) -> List[PatchProposal]:
-    findings = semgrep_results.get("results", [])
-    if not isinstance(findings, Sequence):
-        return []
-
-    if not any(
-        isinstance(finding, Mapping) and _matches_sql_concat_rule(finding.get("check_id"))
-        for finding in findings
-    ):
-        return []
-
-    proposal = _synthesize_sql_concatenation_patch(repo_path)
-    return [proposal] if proposal else []
 
 
 def _ensure_git_identity(repo_path: Path) -> None:
@@ -937,23 +842,6 @@ def generate_remediations(
     )
 
     summary_markdown = driver.output_markdown.read_text(encoding="utf-8")
-    builtin = _builtin_remediations(semgrep_results, repo_path)
-    if builtin:
-        proposals.extend(builtin)
-        summary_lines: List[str] = []
-        base_summary = summary_markdown.strip()
-        if base_summary:
-            summary_lines.append(base_summary)
-        summary_lines.extend(
-            [
-                "",
-                "## Built-in remediations",
-                "- Hardened raw SQL queries in `app_vuln.py` by switching to parameterized statements.",
-            ]
-        )
-        summary_markdown = "\n".join(summary_lines).strip()
-        driver.output_markdown.parent.mkdir(parents=True, exist_ok=True)
-        driver.output_markdown.write_text(summary_markdown + "\n", encoding="utf-8")
 
     artifacts: Dict[str, Path] = {
         "semgrep_results": findings_path,

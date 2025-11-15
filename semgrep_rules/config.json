@@ -1,11 +1,6 @@
 {
   "rulesets": [
     {
-      "type": "local",
-      "label": "custom",
-      "value": "custom"
-    },
-    {
       "type": "registry",
       "label": "owasp-top-ten",
       "value": "p/owasp-top-ten"
