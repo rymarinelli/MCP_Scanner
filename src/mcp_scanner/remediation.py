@@ -32,13 +32,6 @@ def _default_patch_program(*, repo_root: Path | None = None) -> PatchSuggestionP
 
         return HuggingFacePatchSuggestionProgram(model_name=settings_model)
 
-    from . import dspy_programs as _dspy_programs
-
-    if _dspy_programs.dspy is None and repo_root is not None:
-        from remediation.heuristic_program import HeuristicPatchSuggestionProgram
-
-        return HeuristicPatchSuggestionProgram(repo_root=repo_root)
-
     return PatchSuggestionProgram()
 from .models import PatchProposal, ValidationResult, VulnerabilityContext, ensure_directory
 
