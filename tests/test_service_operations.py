@@ -18,6 +18,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from semgrep_runner import RunnerConfig, RunnerOutput
 
 from service.operations import (
+    _authenticated_remote_candidates,
     CommitApplicationResult,
     CommitRecord,
     PullRequestResult,
@@ -26,6 +27,7 @@ from service.operations import (
     apply_remediation_commits,
     clone_repository,
     PushResult,
+    push_remediation_branch,
     generate_remediations,
     perform_scan,
     run_semgrep_scan,
@@ -897,4 +899,52 @@ def test_apply_remediation_commits_handles_failed_patch(tmp_path: Path) -> None:
 )
 def test_parse_repo_slug_supports_common_git_urls(url: str, expected: tuple[str, str]) -> None:
     assert _parse_repo_slug(url) == expected
+
+
+def test_authenticated_remote_candidates_include_multiple_formats(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("GIT_USER", "security-bot")
+    candidates = _authenticated_remote_candidates(
+        "https://github.com/example/project.git", "ghp_secret"
+    )
+    assert candidates[0] == "https://x-access-token:ghp_secret@github.com/example/project.git"
+    assert "https://security-bot:ghp_secret@github.com/example/project.git" in candidates
+    assert "https://example:ghp_secret@github.com/example/project.git" in candidates
+    assert candidates[-1] == "https://ghp_secret@github.com/example/project.git"
+
+
+def test_push_remediation_branch_retries_with_alternate_credentials(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    repo = tmp_path / "repo"
+    repo.mkdir()
+
+    push_invocations = {"count": 0}
+    commands: list[list[str]] = []
+
+    def fake_run(command, *, cwd=None, input=None):  # type: ignore[no-redef]
+        assert cwd == repo
+        commands.append(command)
+        if command[:3] == ["git", "push", "--set-upstream"]:
+            push_invocations["count"] += 1
+            if push_invocations["count"] == 1:
+                return subprocess.CompletedProcess(command, 1, "", "fatal: Authentication failed")
+            return subprocess.CompletedProcess(command, 0, "ok", "")
+        return subprocess.CompletedProcess(command, 0, "", "")
+
+    monkeypatch.setenv("GIT_USER", "security-bot")
+    monkeypatch.setattr("service.operations._run_subprocess", fake_run)
+
+    result = push_remediation_branch(
+        repo_path=repo,
+        repo_url="https://github.com/example/project.git",
+        branch_name="mcp/remediation-test",
+        token="ghp_secret",
+    )
+
+    assert result.status == "success"
+    assert push_invocations["count"] == 2
+
+    set_url_commands = [cmd for cmd in commands if cmd[:3] == ["git", "remote", "set-url"]]
+    assert len(set_url_commands) >= 2
+    assert any("security-bot:ghp_secret" in cmd[-1] for cmd in set_url_commands)
 

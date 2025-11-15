@@ -15,7 +15,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, List, Mapping, MutableMapping, Optional, Sequence, Tuple
-from urllib.parse import urlparse, urlunparse
+from urllib.parse import quote, urlparse, urlunparse
 
 from enumeration.collector import RepositoryCollector, write_graph
 from enumeration.context import build_rag_context, write_rag_context
@@ -603,12 +603,52 @@ def apply_remediation_commits(
     return CommitApplicationResult(branch=branch_name, commits=commits, errors=errors)
 
 
-def _build_authenticated_remote(repo_url: str, token: str) -> Optional[str]:
+def _authenticated_remote_candidates(repo_url: str, token: str) -> List[str]:
+    """Generate HTTPS remote URLs that embed ``token`` for authentication."""
+
     parsed = urlparse(repo_url)
     if parsed.scheme.lower() != "https":
-        return None
-    netloc = f"x-access-token:{token}@{parsed.netloc}"
-    return urlunparse((parsed.scheme, netloc, parsed.path, parsed.params, parsed.query, parsed.fragment))
+        return []
+
+    encoded_token = quote(token, safe="")
+    netloc = parsed.netloc
+
+    def _build(netloc_value: str) -> str:
+        return urlunparse(
+            (parsed.scheme, netloc_value, parsed.path, parsed.params, parsed.query, parsed.fragment)
+        )
+
+    candidates: List[str] = []
+    seen: set[str] = set()
+
+    def _add_candidate(netloc_value: str) -> None:
+        url = _build(netloc_value)
+        if url not in seen:
+            seen.add(url)
+            candidates.append(url)
+
+    # GitHub App installation tokens expect the fixed ``x-access-token`` username.
+    _add_candidate(f"x-access-token:{encoded_token}@{netloc}")
+
+    username_hints: List[str] = []
+    env_username = os.environ.get("GIT_USER") or os.environ.get("GITHUB_ACTOR")
+    if env_username:
+        username_hints.append(env_username)
+
+    slug = _parse_repo_slug(repo_url)
+    if slug:
+        owner, _ = slug
+        if owner:
+            username_hints.append(owner)
+
+    for username in username_hints:
+        encoded_username = quote(username, safe="")
+        _add_candidate(f"{encoded_username}:{encoded_token}@{netloc}")
+
+    # Personal access tokens support being supplied as the username component.
+    _add_candidate(f"{encoded_token}@{netloc}")
+
+    return candidates
 
 
 def _parse_repo_slug(repo_url: str) -> Optional[Tuple[str, str]]:
@@ -661,16 +701,34 @@ def push_remediation_branch(
     if not token:
         return PushResult(status="skipped", branch=branch_name, reason="GITHUB_TOKEN not provided")
 
-    remote_url = _build_authenticated_remote(repo_url, token)
-    if remote_url:
-        _run_subprocess(["git", "remote", "set-url", "origin", remote_url], cwd=repo_path)
+    remote_variants = _authenticated_remote_candidates(repo_url, token)
+    if not remote_variants:
+        remote_variants = [None]
 
-    push = _run_subprocess(["git", "push", "--set-upstream", "origin", branch_name], cwd=repo_path)
-    if push.returncode != 0:
+    errors: List[str] = []
+    for remote_url in remote_variants:
+        if remote_url:
+            _run_subprocess(["git", "remote", "set-url", "origin", remote_url], cwd=repo_path)
+
+        push = _run_subprocess(["git", "push", "--set-upstream", "origin", branch_name], cwd=repo_path)
+        if push.returncode == 0:
+            return PushResult(status="success", branch=branch_name, remote="origin", message="Branch pushed to origin")
+
         message = push.stderr.strip() or push.stdout.strip() or "Unknown git error"
-        return PushResult(status="error", branch=branch_name, remote="origin", error=message)
+        errors.append(message)
 
-    return PushResult(status="success", branch=branch_name, remote="origin", message="Branch pushed to origin")
+    error_message = errors[-1] if errors else "Unknown git error"
+    reason = None
+    if len(errors) > 1:
+        reason = "git push failed after attempting multiple credential formats"
+
+    return PushResult(
+        status="error",
+        branch=branch_name,
+        remote="origin",
+        error=error_message,
+        reason=reason,
+    )
 
 
 def open_remediation_pull_request(
