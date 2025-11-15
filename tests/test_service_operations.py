@@ -367,8 +367,13 @@ def test_perform_scan_happy_path(monkeypatch: pytest.MonkeyPatch) -> None:
 
     result = perform_scan(repo_url="https://example.com/demo.git", branch="main")
     assert result["repository"]["url"] == "https://example.com/demo.git"
-    assert result["remediation"]["proposals"] == []
-    assert result["remediation"]["summary_markdown"] == "report"
+    remediation = result["remediation"]
+    assert remediation["proposals"] == []
+    assert remediation["summary_markdown"] == "report"
+    assert remediation["pull_request"]["status"] == "skipped"
+    assert remediation["pull_request"]["reason"] == "no remediation commits produced"
+    assert remediation["push"]["status"] == "skipped"
+    assert remediation["push"]["reason"] == "no remediation commits produced"
     assert result["enumeration"]["rag_context"] == {}
 
 
@@ -419,8 +424,10 @@ def test_perform_scan_skips_commits_when_disabled(monkeypatch: pytest.MonkeyPatc
     remediation = result["remediation"]
     assert remediation["summary_markdown"] == "summary"
     assert remediation["proposals"] == []
-    assert "push" not in remediation
-    assert "pull_request" not in remediation
+    assert remediation["push"]["status"] == "skipped"
+    assert remediation["push"]["reason"] == "apply_commits disabled by configuration"
+    assert remediation["pull_request"]["status"] == "skipped"
+    assert remediation["pull_request"]["reason"] == "apply_commits disabled by configuration"
 
 
 def test_perform_scan_skips_push_and_pr_when_disabled(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:

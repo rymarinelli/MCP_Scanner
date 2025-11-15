@@ -1055,9 +1055,42 @@ def perform_scan(
                             pr_labels=pr_labels,
                         )
                 elif push_result.status == "skipped":
-                    pr_result = PullRequestResult(status="skipped", reason=push_result.reason)
+                    pr_result = PullRequestResult(
+                        status="skipped",
+                        reason=push_result.reason or "push was skipped",
+                    )
+                else:
+                    pr_result = PullRequestResult(
+                        status="skipped",
+                        reason=push_result.reason or "push failed",
+                        error=push_result.error,
+                    )
             else:
                 pr_result = PullRequestResult(status="skipped", reason="pull request disabled by configuration")
+        else:
+            if apply_commits:
+                if commit_result.branch and not commit_result.commits:
+                    push_result = PushResult(
+                        status="skipped",
+                        branch=commit_result.branch,
+                        reason="no remediation commits produced",
+                    )
+                if create_pr:
+                    skip_reason = "no remediation commits produced"
+                    if commit_result.errors:
+                        skip_reason += "; review commit_errors for details"
+                    pr_result = PullRequestResult(status="skipped", reason=skip_reason)
+            else:
+                if push:
+                    push_result = PushResult(
+                        status="skipped",
+                        reason="apply_commits disabled by configuration",
+                    )
+                if create_pr:
+                    pr_result = PullRequestResult(
+                        status="skipped",
+                        reason="apply_commits disabled by configuration",
+                    )
 
         remediation_artifacts = _persist_remediation_artifacts(
             remediation_result.artifacts,
