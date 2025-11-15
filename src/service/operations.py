@@ -67,13 +67,35 @@ def _sanitize_remote(remote_url: str | None) -> str:
 
     if not remote_url:
         return ""
-    if "@" not in remote_url:
+
+    try:
+        parsed = urlparse(remote_url)
+    except Exception:  # pragma: no cover - defensive guard
+        return "***"
+
+    if "@" not in parsed.netloc:
         return remote_url
-    prefix, suffix = remote_url.split("@", 1)
-    if ":" in prefix:
-        username, _ = prefix.split(":", 1)
-        return f"{username}:***@{suffix}"
-    return f"***@{suffix}"
+
+    username_part, host = parsed.netloc.split("@", 1)
+    if ":" in username_part:
+        username = username_part.split(":", 1)[0]
+        sanitized = f"{username}:***@{host}"
+    else:
+        sanitized = f"***@{host}"
+
+    return urlunparse((parsed.scheme, sanitized, parsed.path, parsed.params, parsed.query, parsed.fragment))
+
+
+def _normalize_github_token(token: Optional[str]) -> Optional[str]:
+    """Strip whitespace from ``token`` and treat empty strings as missing."""
+
+    if token is None:
+        return None
+
+    normalized = token.strip()
+    if not normalized:
+        return None
+    return normalized
 
 
 class ScanExecutionError(RuntimeError):
@@ -761,8 +783,12 @@ def apply_remediation_commits(
     return CommitApplicationResult(branch=branch_name, commits=commits, errors=errors)
 
 
-def _authenticated_remote_candidates(repo_url: str, token: str) -> List[str]:
+def _authenticated_remote_candidates(repo_url: str, token: str | None) -> List[str]:
     """Generate HTTPS remote URLs that embed ``token`` for authentication."""
+
+    token = _normalize_github_token(token)
+    if not token:
+        return []
 
     parsed = urlparse(repo_url)
     if parsed.scheme.lower() != "https":
@@ -855,7 +881,7 @@ def push_remediation_branch(
     if not branch_name:
         return PushResult(status="skipped", reason="no branch provided")
 
-    token = token if token is not None else os.environ.get("GITHUB_TOKEN")
+    token = _normalize_github_token(token if token is not None else os.environ.get("GITHUB_TOKEN"))
     if not token:
         LOGGER.warning("Skipping push for %s: no GITHUB_TOKEN provided", branch_name)
         return PushResult(status="skipped", branch=branch_name, reason="GITHUB_TOKEN not provided")
@@ -930,7 +956,7 @@ def open_remediation_pull_request(
         LOGGER.warning("Skipping pull request creation: no commits available")
         return PullRequestResult(status="skipped", reason="no commits to include")
 
-    token = token if token is not None else os.environ.get("GITHUB_TOKEN")
+    token = _normalize_github_token(token if token is not None else os.environ.get("GITHUB_TOKEN"))
     if not token:
         LOGGER.warning("Skipping pull request creation: no GITHUB_TOKEN provided")
         return PullRequestResult(status="skipped", reason="GITHUB_TOKEN not provided")
@@ -1229,6 +1255,10 @@ def perform_scan(
             LOGGER.info("Using GitHub token from environment for authentication")
         else:
             LOGGER.warning("GitHub token not provided; push/PR steps may be skipped")
+
+    github_token = _normalize_github_token(github_token)
+    if github_token is None:
+        LOGGER.warning("GitHub token unavailable after normalization; push/PR steps may be skipped")
 
     artifact_root = Path(tempfile.mkdtemp(prefix="mcp-scan-artifacts-"))
     LOGGER.info("Artifacts will be persisted under %s", artifact_root)

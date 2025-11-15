@@ -20,7 +20,9 @@ from semgrep_runner import RunnerConfig, RunnerOutput
 from service.operations import (
     _authenticated_remote_candidates,
     _looks_like_patch,
+    _normalize_github_token,
     _normalize_patch_text,
+    _sanitize_remote,
     CommitApplicationResult,
     CommitRecord,
     PullRequestResult,
@@ -888,6 +890,27 @@ def test_authenticated_remote_candidates_include_multiple_formats(monkeypatch: p
     assert candidates[-1] == "https://ghp_secret@github.com/example/project.git"
 
 
+def test_authenticated_remote_candidates_strip_whitespace(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("GIT_USER", raising=False)
+    candidates = _authenticated_remote_candidates(
+        "https://github.com/example/project.git", "  ghp_secret\n"
+    )
+    assert candidates[0] == "https://x-access-token:ghp_secret@github.com/example/project.git"
+    assert candidates[-1] == "https://ghp_secret@github.com/example/project.git"
+
+
+def test_normalize_github_token() -> None:
+    assert _normalize_github_token("  ghp_secret\n") == "ghp_secret"
+    assert _normalize_github_token("\n\t  ") is None
+
+
+def test_sanitize_remote_preserves_scheme_and_username() -> None:
+    with_username = _sanitize_remote("https://security-bot:ghp_secret@github.com/example/project.git")
+    assert with_username == "https://security-bot:***@github.com/example/project.git"
+    without_username = _sanitize_remote("https://ghp_secret@github.com/example/project.git")
+    assert without_username == "https://***@github.com/example/project.git"
+
+
 def test_push_remediation_branch_retries_with_alternate_credentials(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -914,7 +937,7 @@ def test_push_remediation_branch_retries_with_alternate_credentials(
         repo_path=repo,
         repo_url="https://github.com/example/project.git",
         branch_name="mcp/remediation-test",
-        token="ghp_secret",
+        token=" ghp_secret\n",
     )
 
     assert result.status == "success"
