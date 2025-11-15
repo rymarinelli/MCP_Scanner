@@ -522,6 +522,32 @@ def _group_proposals(proposals: Sequence[PatchProposal]) -> Dict[str, List[Patch
     return grouped
 
 
+def _looks_like_patch(diff_text: str) -> bool:
+    """Heuristically determine whether ``diff_text`` appears to be a patch."""
+
+    if not diff_text:
+        return False
+
+    stripped = diff_text.lstrip()
+    if not stripped:
+        return False
+
+    # Common diff formats start with ``diff --git`` or file markers.
+    if stripped.startswith("diff --git"):
+        return True
+
+    lines = stripped.splitlines()
+    if not lines:
+        return False
+
+    # Unified diffs begin with ``---``/``+++`` headers and contain ``@@`` hunks.
+    for candidate in lines[:5]:
+        if candidate.startswith("--- ") or candidate.startswith("+++ "):
+            return True
+
+    return any(line.startswith("@@") for line in lines)
+
+
 def apply_remediation_commits(
     repo_path: Path,
     proposals: Sequence[PatchProposal],
@@ -531,38 +557,64 @@ def apply_remediation_commits(
     if not proposals:
         return CommitApplicationResult(branch=None, commits=[], errors=[])
 
-    branch_name = f"mcp/remediation-{uuid.uuid4().hex[:8]}"
-    LOGGER.info("Creating remediation branch %s", branch_name)
-    checkout = _run_subprocess(["git", "checkout", "-b", branch_name], cwd=repo_path)
-    if checkout.returncode != 0:
-        message = checkout.stderr.strip() or checkout.stdout.strip() or "Unknown git error"
-        raise ScanExecutionError(f"git checkout -b {branch_name} failed: {message}")
-
-    _ensure_git_identity(repo_path)
-    LOGGER.info("Git identity configured for remediation commits")
-
     commits: List[CommitRecord] = []
     errors: List[CommitError] = []
+    branch_name: Optional[str] = None
+    branch_initialized = False
+
+    def _ensure_branch() -> None:
+        nonlocal branch_initialized, branch_name
+        if branch_initialized:
+            return
+        branch_name = f"mcp/remediation-{uuid.uuid4().hex[:8]}"
+        LOGGER.info("Creating remediation branch %s", branch_name)
+        checkout = _run_subprocess(["git", "checkout", "-b", branch_name], cwd=repo_path)
+        if checkout.returncode != 0:
+            message = checkout.stderr.strip() or checkout.stdout.strip() or "Unknown git error"
+            raise ScanExecutionError(f"git checkout -b {branch_name} failed: {message}")
+
+        _ensure_git_identity(repo_path)
+        LOGGER.info("Git identity configured for remediation commits")
+        branch_initialized = True
+
     for vulnerability_id, group in _group_proposals(proposals).items():
         if not group:
             continue
 
+        valid_proposals: List[PatchProposal] = []
+        for proposal in group:
+            patch_text = (proposal.diff or "").strip()
+            if not patch_text:
+                errors.append(CommitError(vulnerability_id=vulnerability_id, reason="empty_diff"))
+                LOGGER.warning("Skipping proposal for %s due to empty diff", vulnerability_id)
+                continue
+            if not _looks_like_patch(patch_text):
+                errors.append(
+                    CommitError(
+                        vulnerability_id=vulnerability_id,
+                        reason="invalid_patch_format",
+                        details="proposal diff does not resemble a unified diff",
+                    )
+                )
+                LOGGER.warning(
+                    "Skipping proposal for %s due to non-diff content", vulnerability_id
+                )
+                continue
+            valid_proposals.append(proposal)
+
+        if not valid_proposals:
+            continue
+
+        _ensure_branch()
+
         LOGGER.info(
             "Applying %s proposal(s) for vulnerability %s",
-            len(group),
+            len(valid_proposals),
             vulnerability_id,
         )
         apply_failed = False
-        for proposal in group:
+        for proposal in valid_proposals:
             patch_text = proposal.diff or ""
-            if not patch_text.strip():
-                errors.append(CommitError(vulnerability_id=vulnerability_id, reason="empty_diff"))
-                LOGGER.warning(
-                    "Skipping proposal for %s due to empty diff", vulnerability_id
-                )
-                apply_failed = True
-                break
-
             apply_result = _run_subprocess(
                 ["git", "apply", "--whitespace=fix"],
                 cwd=repo_path,
@@ -638,7 +690,7 @@ def apply_remediation_commits(
                 vulnerability_id=vulnerability_id,
                 commit_sha=commit_sha,
                 message=message,
-                proposals=list(group),
+                proposals=list(valid_proposals),
             )
         )
         LOGGER.info(

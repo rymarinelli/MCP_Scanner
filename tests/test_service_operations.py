@@ -828,9 +828,11 @@ def test_apply_remediation_commits_handles_failed_patch(tmp_path: Path) -> None:
     )
 
     result = apply_remediation_commits(repo, [proposal])
+    assert result.branch is None
     assert result.commits == []
     assert result.errors
     assert result.errors[0].vulnerability_id == "vuln-bad"
+    assert result.errors[0].reason == "invalid_patch_format"
     assert "secure" not in (repo / "app.py").read_text(encoding="utf-8")
 
 
