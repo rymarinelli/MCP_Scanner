@@ -6,6 +6,7 @@ import json
 
 import pytest
 
+from common.config import reset_settings_cache
 from mcp_scanner.models import VulnerabilityContext
 from remediation.huggingface_program import HuggingFacePatchSuggestionProgram
 
@@ -65,6 +66,7 @@ def test_program_returns_empty_on_invalid_json() -> None:
 def test_default_patch_program_prefers_huggingface(monkeypatch: pytest.MonkeyPatch) -> None:
     from mcp_scanner import remediation as remediation_module
 
+    reset_settings_cache()
     monkeypatch.setenv("MCP_LLM__PROVIDER", "huggingface")
     monkeypatch.setenv("MCP_LLM__MODEL", "dummy/model")
 
@@ -86,3 +88,4 @@ def test_default_patch_program_prefers_huggingface(monkeypatch: pytest.MonkeyPat
 
     monkeypatch.delenv("MCP_LLM__PROVIDER", raising=False)
     monkeypatch.delenv("MCP_LLM__MODEL", raising=False)
+    reset_settings_cache()

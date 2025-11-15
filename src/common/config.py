@@ -95,10 +95,17 @@ def get_settings() -> AppSettings:
     return AppSettings()
 
 
+def reset_settings_cache() -> None:
+    """Clear the cached settings so future calls reflect new environment values."""
+
+    get_settings.cache_clear()
+
+
 __all__ = [
     "GraphSettings",
     "LLMSettings",
     "ScannerSettings",
     "AppSettings",
     "get_settings",
+    "reset_settings_cache",
 ]
