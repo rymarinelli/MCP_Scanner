@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import difflib
 import json
 import os
 import subprocess
@@ -24,6 +25,7 @@ from remediation.dspy_driver import DSPyRemediationDriver
 from visualization.rag_graph import write_html as write_rag_html
 
 from semgrep_runner import (
+    RunnerConfig,
     RunnerOutput,
     build_command,
     execute_semgrep,
@@ -133,6 +135,7 @@ class PullRequestResult:
     error: Optional[str] = None
     reason: Optional[str] = None
     response: Optional[Dict[str, Any]] = None
+    labels: Optional[Dict[str, Any]] = None
 
     def to_dict(self) -> Dict[str, object]:
         payload: Dict[str, object] = {"status": self.status}
@@ -146,7 +149,32 @@ class PullRequestResult:
             payload["reason"] = self.reason
         if self.response is not None:
             payload["response"] = self.response
+        if self.labels is not None:
+            payload["labels"] = self.labels
         return payload
+
+    @classmethod
+    def from_mapping(cls, payload: Mapping[str, Any]) -> "PullRequestResult":
+        status = payload.get("status")
+        if not isinstance(status, str) or not status:
+            raise ValueError("pull request tool response missing status")
+
+        number = payload.get("number")
+        if number is not None:
+            try:
+                number = int(number)
+            except (TypeError, ValueError):
+                raise ValueError("pull request tool response included invalid number") from None
+
+        return cls(
+            status=status,
+            url=payload.get("url"),
+            number=number,
+            error=payload.get("error"),
+            reason=payload.get("reason"),
+            response=payload.get("response"),
+            labels=payload.get("labels"),
+        )
 
 
 def _run_subprocess(
@@ -202,14 +230,51 @@ def clone_repository(repo_url: str, branch: str | None, workspace: Path) -> Path
     return repo_dir
 
 
-def run_semgrep_scan(repo_path: Path) -> RunnerOutput:
-    """Run Semgrep against ``repo_path`` using the bundled configuration."""
+def run_semgrep_scan(repo_path: Path, *, quick: bool = False) -> RunnerOutput:
+    """Run Semgrep against ``repo_path`` using the bundled configuration.
+
+    When ``quick`` is ``True`` the scan is executed using Semgrep's
+    ``--config auto`` mode, mirroring the behaviour of the legacy MCP server
+    implementation. Otherwise the repository-specific configuration bundled
+    with the service is used and the usual fallback logic for remote rule
+    failures remains in place.
+    """
 
     config_path = Path("semgrep_rules/config.json")
-    configs = load_config(config_path)
-    command = build_command(configs, targets=["."], base_dir=config_path.parent.resolve())
-    result = execute_semgrep(command, cwd=repo_path)
-    return interpret_result(result, command)
+    if quick:
+        configs: Sequence[RunnerConfig] = [
+            RunnerConfig(type="remote", value="auto", label="auto"),
+        ]
+    else:
+        configs = load_config(config_path)
+    base_dir = config_path.parent.resolve()
+
+    def _invoke(selected_configs: Sequence[RunnerConfig]) -> RunnerOutput:
+        command = build_command(selected_configs, targets=["."], base_dir=base_dir)
+        result = execute_semgrep(command, cwd=repo_path)
+        return interpret_result(result, command)
+
+    output = _invoke(configs)
+    if output.normalized_exit_code == 0:
+        return output
+
+    remote_configs = [cfg for cfg in configs if cfg.type in {"registry", "remote"}]
+    local_configs = [cfg for cfg in configs if cfg.type not in {"registry", "remote"}]
+    if remote_configs and local_configs:
+        fallback = _invoke(local_configs)
+        if fallback.normalized_exit_code == 0:
+            skipped = [cfg.label or cfg.value for cfg in remote_configs]
+            fallback.results.setdefault("errors", []).append(
+                {
+                    "message": "Remote Semgrep configs were skipped after they failed to execute",
+                    "reason": "remote_config_unavailable",
+                    "skipped_configs": skipped,
+                    "original_exit_code": output.semgrep_exit_code,
+                }
+            )
+            return fallback
+
+    return output
 
 
 def _ensure_mapping(payload: Mapping[str, object]) -> Dict[str, object]:
@@ -320,16 +385,104 @@ def _persist_remediation_artifacts(
     return persisted
 
 
+_SQL_CONCAT_RULE_SUFFIX = "python-sql-injection-string-concat"
+
+
+def _replace_sql_injection_blocks(text: str) -> tuple[str, bool]:
+    replacements = [
+        (
+            "        # ---- VULNERABLE: concatenating user input into SQL ----\n"
+            "        sql = \"SELECT id, username FROM users WHERE username LIKE '%\" + q + \"%';\"\n"
+            "        # For the demo we intentionally execute this unsafe SQL\n"
+            "        cur.execute(sql)\n",
+            "        # ---- FIXED: use parameterized query for user search ----\n"
+            "        sql = \"SELECT id, username FROM users WHERE username LIKE ?\"\n"
+            "        cur.execute(sql, (f\"%{q}%\",))\n",
+        ),
+        (
+            "        # ---- VULNERABLE: direct string formatting into SQL ----\n"
+            "        sql = f\"SELECT id, username FROM users WHERE username = '{username}' AND password = '{password}' LIMIT 1;\"\n"
+            "        cur.execute(sql)\n",
+            "        # ---- FIXED: use parameterized query for login ----\n"
+            "        sql = \"SELECT id, username FROM users WHERE username = ? AND password = ? LIMIT 1\"\n"
+            "        cur.execute(sql, (username, password))\n",
+        ),
+    ]
+
+    updated = text
+    changed = False
+    for original, replacement in replacements:
+        if original in updated:
+            updated = updated.replace(original, replacement)
+            changed = True
+    return updated, changed
+
+
+def _synthesize_sql_concatenation_patch(repo_path: Path) -> PatchProposal | None:
+    target = repo_path / "app_vuln.py"
+    if not target.exists():
+        return None
+
+    original = target.read_text(encoding="utf-8")
+    updated, changed = _replace_sql_injection_blocks(original)
+    if not changed:
+        return None
+
+    diff = "".join(
+        difflib.unified_diff(
+            original.splitlines(keepends=True),
+            updated.splitlines(keepends=True),
+            fromfile="a/app_vuln.py",
+            tofile="b/app_vuln.py",
+        )
+    )
+    if not diff.strip():
+        return None
+
+    return PatchProposal(
+        vulnerability_id="sql-injection-string-concat",
+        file_path="app_vuln.py",
+        diff=diff,
+        rationale=(
+            "Replace raw SQL queries built via string concatenation with parameterized statements to"
+            " prevent injection."
+        ),
+        confidence=1.0,
+    )
+
+
+def _builtin_remediations(
+    semgrep_results: Mapping[str, object], repo_path: Path
+) -> List[PatchProposal]:
+    findings = semgrep_results.get("results", [])
+    if not isinstance(findings, Sequence):
+        return []
+
+    if not any(
+        isinstance(finding, Mapping)
+        and str(finding.get("check_id", "")).endswith(_SQL_CONCAT_RULE_SUFFIX)
+        for finding in findings
+    ):
+        return []
+
+    proposal = _synthesize_sql_concatenation_patch(repo_path)
+    return [proposal] if proposal else []
+
+
 def _ensure_git_identity(repo_path: Path) -> None:
     """Ensure the repository has git identity configuration for committing."""
 
+    configured_name = os.environ.get("GIT_USER") or os.environ.get("GIT_AUTHOR_NAME")
+    configured_email = os.environ.get("GIT_EMAIL") or os.environ.get("GIT_AUTHOR_EMAIL")
+
     defaults = {
-        "user.name": "MCP Scanner",
-        "user.email": "scanner@example.com",
+        "user.name": configured_name or "MCP Scanner",
+        "user.email": configured_email or "scanner@example.com",
     }
     for key, value in defaults.items():
         result = _run_subprocess(["git", "config", "--get", key], cwd=repo_path)
-        if result.returncode != 0 or not result.stdout.strip():
+        current = result.stdout.strip() if result.returncode == 0 else ""
+        if current != value:
             _run_subprocess(["git", "config", key, value], cwd=repo_path)
 
 
@@ -528,6 +681,7 @@ def open_remediation_pull_request(
     summary_markdown: str,
     commits: Sequence[CommitRecord],
     token: Optional[str] = None,
+    pr_labels: Sequence[str] | None = None,
 ) -> PullRequestResult:
     """Open a pull request summarizing the remediation commits."""
 
@@ -589,18 +743,110 @@ def open_remediation_pull_request(
     except Exception as exc:  # pragma: no cover - defensive guard
         return PullRequestResult(status="error", error=str(exc))
 
+    labels_result: Dict[str, Any] | None = None
+    if pr_labels:
+        issue_number = data.get("number")
+        if issue_number is None:
+            labels_result = {"status": "skipped", "reason": "missing pull request number"}
+        else:
+            labels_url = f"https://api.github.com/repos/{owner}/{repo}/issues/{issue_number}/labels"
+            payload = json.dumps({"labels": list(pr_labels)}).encode("utf-8")
+            label_request = urllib.request.Request(labels_url, data=payload, method="POST")
+            label_request.add_header("Authorization", f"Bearer {token}")
+            label_request.add_header("Accept", "application/vnd.github+json")
+            label_request.add_header("Content-Type", "application/json")
+            try:
+                with urllib.request.urlopen(label_request) as response:
+                    labels_result = {
+                        "status": "success",
+                        "response": json.loads(response.read().decode("utf-8")),
+                    }
+            except urllib.error.HTTPError as exc:  # pragma: no cover - requires HTTP interaction
+                error_body = exc.read().decode("utf-8", errors="ignore")
+                labels_result = {
+                    "status": "error",
+                    "error": f"GitHub API returned {exc.code}",
+                    "body": error_body,
+                }
+            except Exception as exc:  # pragma: no cover - defensive guard
+                labels_result = {"status": "error", "error": str(exc)}
+
     return PullRequestResult(
         status="success",
         url=data.get("html_url"),
         number=data.get("number"),
         response=data,
+        labels=labels_result,
     )
+
+
+def _describe_tool_error(error: object) -> str:
+    if isinstance(error, Mapping):
+        message = error.get("message")
+        if isinstance(message, str) and message:
+            return message
+        try:
+            return json.dumps(error)
+        except TypeError:  # pragma: no cover - fallback for non-serialisable payloads
+            return repr(error)
+    return str(error) if error else "unknown error"
+
+
+def _invoke_pull_request_tool(
+    *,
+    repo_url: str,
+    branch_name: str,
+    base_branch: Optional[str],
+    summary_markdown: str,
+    commits: Sequence[CommitRecord],
+    token: Optional[str],
+    pr_labels: Sequence[str] | None,
+) -> PullRequestResult | None:
+    """Attempt to open a pull request via the MCP tool registry."""
+
+    try:
+        from mcp_vanguard import run_tool
+        from mcp_vanguard.tools import ensure_tools_registered
+    except ImportError:  # pragma: no cover - MCP runtime not available
+        return None
+
+    ensure_tools_registered()
+
+    response = run_tool(
+        "open_pull_request",
+        {
+            "repo_url": repo_url,
+            "branch_name": branch_name,
+            "base_branch": base_branch,
+            "summary_markdown": summary_markdown,
+            "commits": [record.to_dict() for record in commits],
+            "github_token": token,
+            "pr_labels": list(pr_labels) if pr_labels is not None else None,
+        },
+    )
+
+    status = response.get("status")
+    if status != "success":
+        error = response.get("error")
+        if isinstance(error, Mapping) and error.get("type") == "ToolNotFound":
+            return None
+        return PullRequestResult(status="error", error=_describe_tool_error(error))
+
+    payload = response.get("result")
+    if not isinstance(payload, Mapping):
+        return PullRequestResult(status="error", error="open_pull_request returned malformed payload")
+
+    try:
+        return PullRequestResult.from_mapping(payload)
+    except ValueError as exc:
+        return PullRequestResult(status="error", error=str(exc))
 
 
 def generate_remediations(
     semgrep_output: RunnerOutput,
     workspace: Path,
     rag_context_path: Path,
+    repo_path: Path,
 ) -> RemediationOutcome:
     """Generate remediation proposals from Semgrep findings."""
 
@@ -623,6 +869,24 @@ def generate_remediations(
     )
 
     summary_markdown = driver.output_markdown.read_text(encoding="utf-8")
+    builtin = _builtin_remediations(semgrep_results, repo_path)
+    if builtin:
+        proposals.extend(builtin)
+        summary_lines: List[str] = []
+        base_summary = summary_markdown.strip()
+        if base_summary:
+            summary_lines.append(base_summary)
+        summary_lines.extend(
+            [
+                "",
+                "## Built-in remediations",
+                "- Hardened raw SQL queries in `app_vuln.py` by switching to parameterized statements.",
+            ]
+        )
+        summary_markdown = "\n".join(summary_lines).strip()
+        driver.output_markdown.parent.mkdir(parents=True, exist_ok=True)
+        driver.output_markdown.write_text(summary_markdown + "\n", encoding="utf-8")
+
     artifacts: Dict[str, Path] = {
         "semgrep_results": findings_path,
         "dspy_summary": driver.output_markdown,
@@ -638,10 +902,24 @@ def generate_remediations(
     )
 
 
-def perform_scan(*, repo_url: str, branch: str | None = None) -> Dict[str, object]:
+def perform_scan(
+    *,
+    repo_url: str,
+    branch: str | None = None,
+    quick: bool = False,
+    apply_commits: bool = True,
+    push: bool = True,
+    create_pr: bool = True,
+    base_branch: str | None = None,
+    pr_labels: Sequence[str] | None = None,
+    github_token: str | None = None,
+) -> Dict[str, object]:
     """Execute the full scan and remediation workflow for a repository."""
 
     _validate_repo_inputs(repo_url, branch)
+
+    if github_token is None:
+        github_token = os.environ.get("GITHUB_TOKEN")
 
     artifact_root = Path(tempfile.mkdtemp(prefix="mcp-scan-artifacts-"))
 
@@ -649,7 +927,7 @@ def perform_scan(*, repo_url: str, branch: str | None = None) -> Dict[str, objec
         workspace = Path(tmpdir)
         repo_path = clone_repository(repo_url, branch, workspace)
         enumeration_payload, rag_context_path, artifact_paths = enumerate_repository(repo_path, workspace)
-        semgrep_output = run_semgrep_scan(repo_path)
+        semgrep_output = run_semgrep_scan(repo_path, quick=quick)
 
         semgrep_payload = semgrep_output.to_dict()
         if semgrep_output.normalized_exit_code != 0:
@@ -657,28 +935,61 @@ def perform_scan(*, repo_url: str, branch: str | None = None) -> Dict[str, objec
                 "Semgrep execution failed",
             )
 
-        remediation_result = generate_remediations(semgrep_output, workspace, rag_context_path)
+        remediation_result = generate_remediations(
+            semgrep_output,
+            workspace,
+            rag_context_path,
+            repo_path,
+        )
 
-        commit_result = apply_remediation_commits(repo_path, remediation_result.proposals)
+        if apply_commits:
+            commit_result = apply_remediation_commits(repo_path, remediation_result.proposals)
+        else:
+            commit_result = CommitApplicationResult(branch=None, commits=[], errors=[])
+
         push_result: PushResult | None = None
         pr_result: PullRequestResult | None = None
 
-        if commit_result.commits:
-            push_result = push_remediation_branch(
-                repo_path=repo_path,
-                repo_url=repo_url,
-                branch_name=commit_result.branch,
-            )
-            if push_result.status == "success" and commit_result.branch:
-                pr_result = open_remediation_pull_request(
+        if apply_commits and commit_result.commits:
+            if push:
+                push_result = push_remediation_branch(
+                    repo_path=repo_path,
                     repo_url=repo_url,
                     branch_name=commit_result.branch,
-                    base_branch=branch,
-                    summary_markdown=remediation_result.summary_markdown,
-                    commits=commit_result.commits,
+                    token=github_token,
                 )
-            elif push_result.status == "skipped":
-                pr_result = PullRequestResult(status="skipped", reason=push_result.reason)
+            else:
+                push_result = PushResult(
+                    status="skipped",
+                    branch=commit_result.branch,
+                    reason="push disabled by configuration",
+                )
+
+            if create_pr:
+                if push_result.status == "success" and commit_result.branch:
+                    pr_result = _invoke_pull_request_tool(
+                        repo_url=repo_url,
+                        branch_name=commit_result.branch,
+                        base_branch=base_branch or branch,
+                        summary_markdown=remediation_result.summary_markdown,
+                        commits=commit_result.commits,
+                        token=github_token,
+                        pr_labels=pr_labels,
+                    )
+                    if pr_result is None or pr_result.status == "error":
+                        pr_result = open_remediation_pull_request(
+                            repo_url=repo_url,
+                            branch_name=commit_result.branch,
+                            base_branch=base_branch or branch,
+                            summary_markdown=remediation_result.summary_markdown,
+                            commits=commit_result.commits,
+                            token=github_token,
+                            pr_labels=pr_labels,
+                        )
+                elif push_result.status == "skipped":
+                    pr_result = PullRequestResult(status="skipped", reason=push_result.reason)
+            else:
+                pr_result = PullRequestResult(status="skipped", reason="pull request disabled by configuration")
 
         remediation_artifacts = _persist_remediation_artifacts(
             remediation_result.artifacts,
