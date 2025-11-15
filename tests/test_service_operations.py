@@ -930,9 +930,9 @@ def test_normalize_git_username(raw: str | None, expected: str | None) -> None:
 
 def test_sanitize_remote_preserves_scheme_and_username() -> None:
     with_username = _sanitize_remote("https://security-bot:ghp_secret@github.com/example/project.git")
-    assert with_username == "https://security-bot:***@github.com/example/project.git"
+    assert with_username == "https://github.com/example/project.git"
     without_username = _sanitize_remote("https://ghp_secret@github.com/example/project.git")
-    assert without_username == "https://***@github.com/example/project.git"
+    assert without_username == "https://github.com/example/project.git"
 
 
 def test_push_remediation_branch_retries_with_alternate_credentials(

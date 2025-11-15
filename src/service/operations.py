@@ -63,7 +63,13 @@ def _json_for_logging(payload: object) -> str:
 
 
 def _sanitize_remote(remote_url: str | None) -> str:
-    """Scrub authentication tokens from remote URLs before logging."""
+    """Scrub authentication tokens from remote URLs before logging.
+
+    The sanitised representation intentionally omits any username/password
+    components entirely so log output mirrors the canonical repository URL and
+    avoids inserting placeholder characters (for example ``***``) that can be
+    mistaken for part of the remote.
+    """
 
     if not remote_url:
         return ""
@@ -71,19 +77,13 @@ def _sanitize_remote(remote_url: str | None) -> str:
     try:
         parsed = urlparse(remote_url)
     except Exception:  # pragma: no cover - defensive guard
-        return "***"
+        return ""
 
     if "@" not in parsed.netloc:
         return remote_url
 
-    username_part, host = parsed.netloc.split("@", 1)
-    if ":" in username_part:
-        username = username_part.split(":", 1)[0]
-        sanitized = f"{username}:***@{host}"
-    else:
-        sanitized = f"***@{host}"
-
-    return urlunparse((parsed.scheme, sanitized, parsed.path, parsed.params, parsed.query, parsed.fragment))
+    host = parsed.netloc.split("@", 1)[1]
+    return urlunparse((parsed.scheme, host, parsed.path, parsed.params, parsed.query, parsed.fragment))
 
 
 def _normalize_github_token(token: Optional[str]) -> Optional[str]:
