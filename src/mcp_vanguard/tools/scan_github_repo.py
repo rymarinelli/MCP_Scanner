@@ -1,6 +1,8 @@
 """GitHub repository scanning tool."""
 from __future__ import annotations
 
+import os
+
 from typing import Any, Dict, Sequence
 from urllib.parse import urlparse
 
@@ -46,6 +48,8 @@ def scan_github_repo(
 
     _validate_github_url(repo_url)
 
+    token = github_token if github_token is not None else os.environ.get("GITHUB_TOKEN")
+
     try:
         return perform_scan(
             repo_url=repo_url,
@@ -56,7 +60,7 @@ def scan_github_repo(
             create_pr=create_pr,
             base_branch=base_branch,
             pr_labels=pr_labels,
-            github_token=github_token,
+            github_token=token,
         )
     except ScanExecutionError as exc:
         raise RuntimeError(str(exc)) from exc

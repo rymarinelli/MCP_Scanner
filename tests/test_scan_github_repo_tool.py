@@ -52,3 +52,18 @@ def test_scan_github_repo_invokes_full_scan(monkeypatch: pytest.MonkeyPatch) -> 
 def test_scan_github_repo_rejects_non_github_url() -> None:
     with pytest.raises(ValueError, match="github.com"):
         scan_github_repo(repo_url="https://gitlab.com/example/demo")
+
+
+def test_scan_github_repo_falls_back_to_env_token(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_perform_scan(**kwargs) -> dict[str, object]:  # type: ignore[no-untyped-def]
+        captured.update(kwargs)
+        return {}
+
+    monkeypatch.setenv("GITHUB_TOKEN", "env_token")
+    monkeypatch.setattr(scan_module, "perform_scan", fake_perform_scan)
+
+    scan_github_repo(repo_url="https://github.com/example/demo")
+
+    assert captured["github_token"] == "env_token"

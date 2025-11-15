@@ -96,7 +96,7 @@ class MCPRequestHandler(BaseHTTPRequestHandler):
         create_pr = payload.get("create_pr", True)
         base_branch = payload.get("base_branch")
         pr_labels = payload.get("pr_labels")
-        github_token = payload.get("github_token")
+        github_token_input = payload.get("github_token")
 
         if not isinstance(repo_url, str) or not repo_url.strip():
             self._send_error(HTTPStatus.BAD_REQUEST, "Field 'repo_url' is required")
@@ -125,7 +125,7 @@ class MCPRequestHandler(BaseHTTPRequestHandler):
         if base_branch is not None and not isinstance(base_branch, str):
             self._send_error(HTTPStatus.BAD_REQUEST, "Field 'base_branch' must be a string if provided")
             return
-        if github_token is not None and not isinstance(github_token, str):
+        if github_token_input is not None and not isinstance(github_token_input, str):
             self._send_error(HTTPStatus.BAD_REQUEST, "Field 'github_token' must be a string if provided")
             return
 
@@ -140,6 +140,12 @@ class MCPRequestHandler(BaseHTTPRequestHandler):
                 "Field 'pr_labels' must be an array of strings if provided",
             )
             return
+
+        github_token = (
+            github_token_input
+            if github_token_input is not None
+            else os.environ.get("GITHUB_TOKEN")
+        )
 
         try:
             result = SCAN_HANDLER(

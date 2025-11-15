@@ -162,3 +162,38 @@ def test_scan_endpoint_rejects_non_string_token(monkeypatch):
         http_server.SCAN_HANDLER = original_handler
         server.shutdown()
         thread.join(timeout=1)
+
+
+def test_scan_endpoint_uses_env_token_when_missing(monkeypatch):
+    from service import http_server
+
+    captured: dict[str, object] = {}
+
+    def fake_handler(**kwargs):  # type: ignore[no-untyped-def]
+        captured.update(kwargs)
+        return {"repository": {"url": kwargs["repo_url"], "branch": kwargs.get("branch")}}
+
+    monkeypatch.setenv("GITHUB_TOKEN", "env_456")
+
+    original_handler = http_server.SCAN_HANDLER
+    http_server.SCAN_HANDLER = fake_handler
+
+    server = http_server.ThreadingHTTPServer(("127.0.0.1", 0), http_server.MCPRequestHandler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    time.sleep(0.1)
+
+    try:
+        host, port = server.server_address
+        conn = HTTPConnection(host, port)
+        payload = json.dumps({"repo_url": "https://example.com/repo.git"})
+        conn.request("POST", "/scan", body=payload, headers={"Content-Type": "application/json"})
+        response = conn.getresponse()
+        response.read()
+
+        assert response.status == 200
+        assert captured["github_token"] == "env_456"
+    finally:
+        http_server.SCAN_HANDLER = original_handler
+        server.shutdown()
+        thread.join(timeout=1)

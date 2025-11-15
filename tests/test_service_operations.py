@@ -571,6 +571,91 @@ def test_perform_scan_uses_provided_token(monkeypatch: pytest.MonkeyPatch, tmp_p
     assert captured["pr_token"] == "ghp_secret"
 
 
+def test_perform_scan_uses_env_token_when_missing(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    repo_dir = tmp_path / "repo"
+    repo_dir.mkdir()
+
+    def fake_clone(repo_url, branch, workspace):  # type: ignore[no-redef]
+        return repo_dir
+
+    fake_output = RunnerOutput(
+        status="ok",
+        normalized_exit_code=0,
+        semgrep_exit_code=0,
+        command=["semgrep"],
+        results={"results": []},
+        stderr=None,
+    )
+
+    def fake_semgrep(path, *, quick=False):  # type: ignore[no-redef]
+        return fake_output
+
+    def fake_enumeration(repo_path, workspace):  # type: ignore[no-redef]
+        rag_context_path = workspace / "rag_context.json"
+        rag_context_path.write_text("{}")
+        return {"rag_context": {}}, rag_context_path, {}
+
+    proposal = PatchProposal(
+        vulnerability_id="demo",
+        file_path="app.py",
+        diff="diff --git a/app.py b/app.py\n",
+        rationale="",
+        confidence=0.9,
+    )
+
+    def fake_remediation(output, workspace, rag_context_path, repo_path):  # type: ignore[no-redef]
+        return RemediationOutcome(proposals=[proposal], summary_markdown="summary", artifacts={})
+
+    commit = CommitRecord(
+        vulnerability_id="demo",
+        commit_sha="abcdef1",
+        message="fix(demo): remediation",
+        proposals=[proposal],
+    )
+
+    def fake_apply(repo_path, proposals):  # type: ignore[no-redef]
+        return CommitApplicationResult(branch="mcp/remediation-1", commits=[commit], errors=[])
+
+    captured: dict[str, object] = {}
+
+    def fake_push(*, repo_path, repo_url, branch_name, token=None):  # type: ignore[no-redef]
+        captured["push_token"] = token
+        return PushResult(status="success", branch=branch_name, remote="origin", message="ok")
+
+    def fake_pr(
+        *,
+        repo_url,
+        branch_name,
+        base_branch,
+        summary_markdown,
+        commits,
+        token=None,
+        pr_labels=None,
+    ):  # type: ignore[no-redef]
+        captured["pr_token"] = token
+        return PullRequestResult(status="success", url="https://example/pr/1", number=1)
+
+    monkeypatch.setenv("GITHUB_TOKEN", "env_secret")
+    monkeypatch.setattr("service.operations.clone_repository", fake_clone)
+    monkeypatch.setattr("service.operations.enumerate_repository", fake_enumeration)
+    monkeypatch.setattr("service.operations.run_semgrep_scan", fake_semgrep)
+    monkeypatch.setattr("service.operations.generate_remediations", fake_remediation)
+    monkeypatch.setattr("service.operations.apply_remediation_commits", fake_apply)
+    monkeypatch.setattr("service.operations.push_remediation_branch", fake_push)
+    monkeypatch.setattr("service.operations.open_remediation_pull_request", fake_pr)
+
+    result = perform_scan(
+        repo_url="https://example.com/project.git",
+        branch="main",
+    )
+
+    remediation = result["remediation"]
+    assert remediation["push"]["status"] == "success"
+    assert remediation["pull_request"]["status"] == "success"
+    assert captured["push_token"] == "env_secret"
+    assert captured["pr_token"] == "env_secret"
+
+
 def test_perform_scan_rejects_option_like_repo_url(monkeypatch: pytest.MonkeyPatch) -> None:
     with pytest.raises(ValueError, match="repo_url must not start with '-'"):
         perform_scan(repo_url="--upload-pack=/tmp/x", branch=None)

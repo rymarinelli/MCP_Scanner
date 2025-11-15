@@ -833,6 +833,9 @@ def perform_scan(
 
     _validate_repo_inputs(repo_url, branch)
 
+    if github_token is None:
+        github_token = os.environ.get("GITHUB_TOKEN")
+
     artifact_root = Path(tempfile.mkdtemp(prefix="mcp-scan-artifacts-"))
 
     with tempfile.TemporaryDirectory(prefix="mcp-scan-") as tmpdir:

@@ -182,7 +182,9 @@ python -m service.http_server  # binds to 0.0.0.0:8000 by default
 ```
 
 Trigger a full remediation run against a GitHub repository by POSTing directly
-to the `/scan` endpoint:
+to the `/scan` endpoint. As long as ``GITHUB_TOKEN`` is exported in the
+environment where the service is running the scanner will pick it up
+automatically—no need to embed the credential in the request payload:
 
 ```bash
 curl -X POST \
@@ -194,8 +196,7 @@ curl -X POST \
         "apply_commits": true,
         "push": true,
         "create_pr": true,
-        "pr_labels": ["automated", "security"],
-        "github_token": "'"${GITHUB_TOKEN}"'"
+        "pr_labels": ["automated", "security"]
       }' \
   http://localhost:8000/scan
 ```
@@ -238,14 +239,13 @@ curl -X POST \
         "repo_url": "https://github.com/rymarinelli/vulnerable_flask_SQL",
         "apply_commits": true,
         "push": true,
-        "create_pr": true,
-        "github_token": "'"${GITHUB_TOKEN}"'"
+        "create_pr": true
       }' \
   https://busy-papers-melt.loca.lt/scan
 ```
 
-As long as either `GITHUB_TOKEN` is provided in the JSON payload (as shown
-above) or exported in the environment where the tunnel script is running, the
-scanner authenticates to GitHub, pushes the remediation branch, and opens a
+As long as ``GITHUB_TOKEN`` is exported in the environment where the tunnel
+script is running, the scanner authenticates to GitHub, pushes the remediation
+branch, and opens a
 pull request. Keep `GIT_USER` and `GIT_EMAIL` configured to control the commit
 authorship information applied to generated fixes.
