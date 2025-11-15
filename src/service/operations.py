@@ -847,6 +847,12 @@ def _authenticated_remote_candidates(repo_url: str, token: str | None) -> List[s
         if owner:
             username_hints.append(owner)
 
+    if username_hints:
+        LOGGER.info(
+            "Derived Git username hints for authentication: %s",
+            username_hints,
+        )
+
     for username in username_hints:
         encoded_username = quote(username, safe="")
         _add_candidate(f"{encoded_username}:{encoded_token}@{netloc}")

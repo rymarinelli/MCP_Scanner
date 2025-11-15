@@ -908,6 +908,18 @@ def test_authenticated_remote_candidates_strip_wrapping_quotes(monkeypatch: pyte
     assert "https://security-bot:ghp_secret@github.com/example/project.git" in candidates
 
 
+def test_authenticated_remote_candidates_include_repo_owner(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("GIT_USER", raising=False)
+    monkeypatch.delenv("GITHUB_ACTOR", raising=False)
+    candidates = _authenticated_remote_candidates(
+        "https://github.com/rymarinelli/vulnerable_flask_SQL.git", "ghp_secret"
+    )
+    assert (
+        "https://rymarinelli:ghp_secret@github.com/rymarinelli/vulnerable_flask_SQL.git"
+        in candidates
+    )
+
+
 def test_normalize_github_token() -> None:
     assert _normalize_github_token("  ghp_secret\n") == "ghp_secret"
     assert _normalize_github_token("\n\t  ") is None
