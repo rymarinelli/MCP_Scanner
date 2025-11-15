@@ -522,13 +522,61 @@ def _group_proposals(proposals: Sequence[PatchProposal]) -> Dict[str, List[Patch
     return grouped
 
 
+def _strip_code_fence(diff_text: str) -> str:
+    """Remove leading and trailing markdown code fences from ``diff_text``."""
+
+    stripped = diff_text.strip()
+    if not stripped.startswith("```"):
+        return diff_text
+
+    lines = stripped.splitlines()
+    if len(lines) < 2:
+        return diff_text
+
+    opening = lines[0].strip().lower()
+    closing = lines[-1].strip()
+    if closing != "```":
+        return diff_text
+
+    body = lines[1:-1]
+    if not body:
+        return ""
+
+    # Some models prefix the fence language (e.g. "```diff" or "```patch").
+    if opening.startswith("```diff") or opening.startswith("```patch"):
+        return "\n".join(body)
+
+    # Generic fences like ````` may still wrap a diff payload.
+    if opening == "```":
+        return "\n".join(body)
+
+    return diff_text
+
+
+def _normalize_patch_text(diff_text: str) -> str:
+    """Normalize a proposed patch by stripping fences and extraneous whitespace."""
+
+    if not diff_text:
+        return ""
+
+    stripped = _strip_code_fence(diff_text)
+    if not stripped:
+        return ""
+
+    normalized = stripped.strip()
+    if normalized and not normalized.endswith("\n"):
+        normalized += "\n"
+    return normalized
+
+
 def _looks_like_patch(diff_text: str) -> bool:
     """Heuristically determine whether ``diff_text`` appears to be a patch."""
 
-    if not diff_text:
+    normalized = _normalize_patch_text(diff_text)
+    if not normalized:
         return False
 
-    stripped = diff_text.lstrip()
+    stripped = normalized.lstrip()
     if not stripped:
         return False
 
@@ -581,14 +629,28 @@ def apply_remediation_commits(
         if not group:
             continue
 
-        valid_proposals: List[PatchProposal] = []
+        valid_proposals: List[Tuple[PatchProposal, str]] = []
         for proposal in group:
-            patch_text = (proposal.diff or "").strip()
-            if not patch_text:
+            patch_text = proposal.diff or ""
+            if not patch_text.strip():
                 errors.append(CommitError(vulnerability_id=vulnerability_id, reason="empty_diff"))
                 LOGGER.warning("Skipping proposal for %s due to empty diff", vulnerability_id)
                 continue
-            if not _looks_like_patch(patch_text):
+            normalized_patch = _normalize_patch_text(patch_text)
+            if not normalized_patch:
+                errors.append(
+                    CommitError(
+                        vulnerability_id=vulnerability_id,
+                        reason="empty_diff",
+                        details="proposal diff became empty after normalization",
+                    )
+                )
+                LOGGER.warning(
+                    "Skipping proposal for %s due to empty diff after normalization",
+                    vulnerability_id,
+                )
+                continue
+            if not _looks_like_patch(normalized_patch):
                 errors.append(
                     CommitError(
                         vulnerability_id=vulnerability_id,
@@ -600,7 +662,7 @@ def apply_remediation_commits(
                     "Skipping proposal for %s due to non-diff content", vulnerability_id
                 )
                 continue
-            valid_proposals.append(proposal)
+            valid_proposals.append((proposal, normalized_patch))
 
         if not valid_proposals:
             continue
@@ -613,12 +675,11 @@ def apply_remediation_commits(
             vulnerability_id,
         )
         apply_failed = False
-        for proposal in valid_proposals:
-            patch_text = proposal.diff or ""
+        for proposal, normalized_patch in valid_proposals:
             apply_result = _run_subprocess(
                 ["git", "apply", "--whitespace=fix"],
                 cwd=repo_path,
-                input=patch_text,
+                input=normalized_patch,
             )
             if apply_result.returncode != 0:
                 details = (apply_result.stderr or apply_result.stdout or "").strip()
@@ -690,7 +751,7 @@ def apply_remediation_commits(
                 vulnerability_id=vulnerability_id,
                 commit_sha=commit_sha,
                 message=message,
-                proposals=list(valid_proposals),
+                proposals=[proposal for proposal, _ in valid_proposals],
             )
         )
         LOGGER.info(
@@ -1121,6 +1182,9 @@ def generate_remediations(
         header = f"DSPy proposal {proposal.vulnerability_id} ({proposal.file_path})"
         diff = proposal.diff.strip() if proposal.diff else ""
         _log_multiline(header, diff or "<empty diff>")
+        normalized_diff = _normalize_patch_text(diff)
+        if normalized_diff and normalized_diff != diff:
+            _log_multiline(f"{header} (normalized)", normalized_diff)
         if proposal.rationale:
             _log_multiline(
                 f"DSPy rationale {proposal.vulnerability_id}", proposal.rationale.strip()

@@ -19,6 +19,8 @@ from semgrep_runner import RunnerConfig, RunnerOutput
 
 from service.operations import (
     _authenticated_remote_candidates,
+    _looks_like_patch,
+    _normalize_patch_text,
     CommitApplicationResult,
     CommitRecord,
     PullRequestResult,
@@ -796,6 +798,14 @@ def _init_git_repo(path: Path) -> Path:
     return repo
 
 
+def test_normalize_patch_text_strips_code_fences() -> None:
+    raw_patch = """```diff\n--- a/app.py\n+++ b/app.py\n@@ -1 +1,2 @@\n-print('hello')\n+print('hello world')\n```"""
+    normalized = _normalize_patch_text(raw_patch)
+    assert normalized.startswith("--- a/app.py")
+    assert "```" not in normalized
+    assert _looks_like_patch(raw_patch)
+
+
 def test_apply_remediation_commits_creates_commits(tmp_path: Path) -> None:
     repo = _init_git_repo(tmp_path)
     patch = """diff --git a/app.py b/app.py\n--- a/app.py\n+++ b/app.py\n@@ -1 +1,2 @@\n-print('hello')\n+print('hello')\n+print('secure')\n"""
@@ -815,6 +825,25 @@ def test_apply_remediation_commits_creates_commits(tmp_path: Path) -> None:
     assert commit.vulnerability_id == "vuln-1"
     assert commit.commit_sha
     assert "print('secure')" in (repo / "app.py").read_text(encoding="utf-8")
+
+
+def test_apply_remediation_commits_handles_code_fence_patch(tmp_path: Path) -> None:
+    repo = _init_git_repo(tmp_path)
+    patch = """```diff\ndiff --git a/app.py b/app.py\n--- a/app.py\n+++ b/app.py\n@@ -1 +1,2 @@\n-print('hello')\n+print('hello')\n+print('patched')\n```"""
+    proposal = PatchProposal(
+        vulnerability_id="vuln-fenced",
+        file_path="app.py",
+        diff=patch,
+        rationale="",
+        confidence=0.9,
+    )
+
+    result = apply_remediation_commits(repo, [proposal])
+    assert result.branch is not None
+    assert len(result.commits) == 1
+    assert not result.errors
+    content = (repo / "app.py").read_text(encoding="utf-8")
+    assert "print('patched')" in content
 
 
 def test_apply_remediation_commits_handles_failed_patch(tmp_path: Path) -> None:
