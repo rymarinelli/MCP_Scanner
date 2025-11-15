@@ -49,9 +49,22 @@ def make_semgrep_payload() -> dict:
                 "extra": {
                     "message": "Debug mode exposes stack traces to end users.",
                     "severity": "HIGH",
-                    "metadata": {"cwe": "CWE-489"},
+                    "metadata": {
+                        "cwe": "CWE-489",
+                        "graph_summary": "Debug flag reachable from app factory",
+                    },
                     "lines": "app.run(debug=True)",
+                    "graph_context": {
+                        "callers": ["create_app"],
+                        "sinks": ["app.run"],
+                    },
                 },
+                "dataflow_traces": [
+                    {
+                        "kind": "control_flow",
+                        "summary": "create_app -> app.run(debug=True)",
+                    }
+                ],
             }
         ]
     }
@@ -96,6 +109,14 @@ def test_driver_generates_markdown_with_manual_review(tmp_path: Path) -> None:
     assert "node-1" in content
     assert "Manual Review Required: Yes" in content
     assert "```diff" in content
+    assert "Knowledge Graph Context" in content
+
+    artifact_path = tmp_path / "artifacts" / "python.flask.security.dangerous-debug-node-1.json"
+    artifact = json.loads(artifact_path.read_text())
+    graph_context = artifact["graph_context"]
+    assert "semgrep_graph_context" in graph_context
+    assert graph_context["semgrep_graph_context"]["graph_context"]["callers"] == ["create_app"]
+    assert "semgrep_finding" in graph_context
 
 
 def test_driver_handles_no_findings(tmp_path: Path) -> None:
