@@ -87,12 +87,18 @@ def _sanitize_remote(remote_url: str | None) -> str:
 
 
 def _normalize_github_token(token: Optional[str]) -> Optional[str]:
-    """Strip whitespace from ``token`` and treat empty strings as missing."""
+    """Normalize ``token`` by trimming whitespace and surrounding quotes."""
 
     if token is None:
         return None
 
     normalized = token.strip()
+    if not normalized:
+        return None
+
+    if len(normalized) >= 2 and normalized[0] == normalized[-1] and normalized[0] in {'"', "'"}:
+        normalized = normalized[1:-1].strip()
+
     if not normalized:
         return None
     return normalized

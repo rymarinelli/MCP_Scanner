@@ -923,6 +923,8 @@ def test_authenticated_remote_candidates_include_repo_owner(monkeypatch: pytest.
 def test_normalize_github_token() -> None:
     assert _normalize_github_token("  ghp_secret\n") == "ghp_secret"
     assert _normalize_github_token("\n\t  ") is None
+    assert _normalize_github_token('"ghp_wrapped"') == "ghp_wrapped"
+    assert _normalize_github_token("'quoted-token'") == "quoted-token"
 
 
 @pytest.mark.parametrize(
