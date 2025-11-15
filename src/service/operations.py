@@ -385,7 +385,18 @@ def _persist_remediation_artifacts(
     return persisted
 
 
-_SQL_CONCAT_RULE_SUFFIX = "python-sql-injection-string-concat"
+_SQL_CONCAT_RULE_IDENTIFIERS = (
+    "python-sql-injection-string-concat",
+    "python.flask.security.injection.tainted-sql-string.tainted-sql-string",
+    "python.django.security.injection.sql.sql-injection-using-db-cursor-execute.sql-injection-db-cursor-execute",
+)
+
+
+def _matches_sql_concat_rule(check_id: object) -> bool:
+    value = str(check_id or "")
+    if not value:
+        return False
+    return any(value == identifier or value.endswith(identifier) for identifier in _SQL_CONCAT_RULE_IDENTIFIERS)
 
 
 def _replace_sql_injection_blocks(text: str) -> tuple[str, bool]:
@@ -459,8 +470,7 @@ def _builtin_remediations(
         return []
 
     if not any(
-        isinstance(finding, Mapping)
-        and str(finding.get("check_id", "")).endswith(_SQL_CONCAT_RULE_SUFFIX)
+        isinstance(finding, Mapping) and _matches_sql_concat_rule(finding.get("check_id"))
         for finding in findings
     ):
         return []

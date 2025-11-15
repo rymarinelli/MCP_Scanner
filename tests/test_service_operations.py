@@ -233,7 +233,15 @@ def test_generate_remediations_creates_summary(tmp_path: Path) -> None:
     assert "dspy_summary" in artifacts
 
 
-def test_generate_remediations_adds_builtin_sql_patch(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    "check_id",
+    [
+        "semgrep_rules.custom.python-sql-injection-string-concat",
+        "python.flask.security.injection.tainted-sql-string.tainted-sql-string",
+        "python.django.security.injection.sql.sql-injection-using-db-cursor-execute.sql-injection-db-cursor-execute",
+    ],
+)
+def test_generate_remediations_adds_builtin_sql_patch(tmp_path: Path, check_id: str) -> None:
     workspace = tmp_path / "workspace"
     workspace.mkdir()
     repo_path = tmp_path / "repo"
@@ -276,14 +284,7 @@ def login():
         normalized_exit_code=0,
         semgrep_exit_code=0,
         command=["semgrep"],
-        results={
-            "results": [
-                {
-                    "check_id": "semgrep_rules.custom.python-sql-injection-string-concat",
-                    "path": "app_vuln.py",
-                }
-            ]
-        },
+        results={"results": [{"check_id": check_id, "path": "app_vuln.py"}]},
         stderr=None,
     )
 
