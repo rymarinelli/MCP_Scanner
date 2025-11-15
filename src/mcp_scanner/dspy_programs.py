@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
 from .models import PatchProposal, VulnerabilityContext
+from remediation.heuristic_patches import HeuristicPatchGenerator
 
 try:  # pragma: no cover - import guard for optional dependency
     import dspy
@@ -111,12 +113,24 @@ else:
     class PatchSuggestionProgram:
         """Fallback implementation when DSPy is unavailable."""
 
-        def __init__(self, *, instructions: Optional[str] = None):
+        def __init__(
+            self,
+            *,
+            instructions: Optional[str] = None,
+            repo_root: Path | str | None = None,
+        ):
             self.instructions = instructions or (
                 "DSPy is unavailable; generating heuristic remediation suggestions."
             )
+            self.repo_root = Path(repo_root) if repo_root else None
+            self.heuristics = HeuristicPatchGenerator(self.repo_root)
 
         def forward(self, context: VulnerabilityContext) -> DSPyResponse:
+            heuristic_patches = self.heuristics.generate(context)
+            if heuristic_patches:
+                raw_output = json.dumps({"patches": heuristic_patches}, indent=2)
+                return DSPyResponse(patches=heuristic_patches, raw_output=raw_output)
+
             metadata_text = _format_dict(context.metadata)
             graph_text = _format_dict(context.graph_context)
             snippet_text = "\n\n".join(context.code_snippets or [])
