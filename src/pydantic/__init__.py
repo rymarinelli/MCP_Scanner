@@ -3,7 +3,13 @@ from __future__ import annotations
 
 from typing import Any, Dict, Optional
 
-__all__ = ["BaseModel", "Field", "RootModel", "field_validator"]
+__all__ = ["BaseModel", "ConfigDict", "Field", "RootModel", "field_validator"]
+
+
+class ConfigDict(dict):
+    """Compatibility shim for ``pydantic.ConfigDict`` used by dependencies."""
+
+    pass
 
 
 class _Missing:
@@ -14,14 +20,19 @@ MISSING = _Missing()
 
 
 class FieldInfo:
-    def __init__(self, default: Any = MISSING, default_factory: Optional[Any] = None) -> None:
+    def __init__(
+        self,
+        default: Any = MISSING,
+        default_factory: Optional[Any] = None,
+        **_: Any,
+    ) -> None:
         self.default = default
         self.default_factory = default_factory
 
 
-def Field(*, default: Any = MISSING, default_factory: Optional[Any] = None) -> FieldInfo:
+def Field(*, default: Any = MISSING, default_factory: Optional[Any] = None, **kwargs: Any) -> FieldInfo:
     """Return metadata describing a model field."""
-    return FieldInfo(default=default, default_factory=default_factory)
+    return FieldInfo(default=default, default_factory=default_factory, **kwargs)
 
 
 def field_validator(*field_names: str, mode: str | None = None):

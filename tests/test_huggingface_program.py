@@ -3,8 +3,17 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
+import sys
 
 import pytest
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+SRC_PATH = PROJECT_ROOT / "src"
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+if str(SRC_PATH) not in sys.path:
+    sys.path.insert(0, str(SRC_PATH))
 
 from common.config import reset_settings_cache
 from mcp_scanner.models import VulnerabilityContext
