@@ -9,7 +9,7 @@ from typing import Iterable, List, Sequence
 from .dspy_programs import DSPyResponse, PatchSuggestionProgram, normalize_patches
 
 
-def _default_patch_program() -> PatchSuggestionProgram:
+def _default_patch_program(*, repo_root: Path | None = None) -> PatchSuggestionProgram:
     """Select the default patch suggestion program based on configuration."""
 
     import os
@@ -44,8 +44,10 @@ class RemediationSuggester:
         *,
         program: PatchSuggestionProgram | None = None,
         output_dir: Path | str = Path("reports/remediations"),
+        repo_root: Path | str | None = None,
     ) -> None:
-        self.program = program or _default_patch_program()
+        self.repo_root = Path(repo_root) if repo_root else None
+        self.program = program or _default_patch_program(repo_root=self.repo_root)
         self.output_dir = Path(output_dir)
         ensure_directory(self.output_dir)
 

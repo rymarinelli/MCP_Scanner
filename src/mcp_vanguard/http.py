@@ -1,14 +1,16 @@
 """HTTP interface for the MCP Vanguard tool runner."""
 from __future__ import annotations
 
+import importlib
 import inspect
 from typing import Any, Dict
 
 from fastapi import FastAPI
 
 from . import core
-from . import tools as _tools  # noqa: F401  # Ensure tools register on import
 from .schemas import ToolCallRequest, ToolCallResponse
+
+_tools = importlib.import_module("mcp_vanguard.tools")  # noqa: F841  # Ensure registration side effects
 
 app = FastAPI()
 

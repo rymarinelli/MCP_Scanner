@@ -22,6 +22,7 @@ class FindingBundle:
     match_confidence: str
     matched_attributes: Dict[str, Any]
     node_context: Dict[str, Any]
+    semgrep_graph_context: Optional[Dict[str, Any]] = None
 
 
 class DSPyRemediationDriver:
@@ -117,6 +118,34 @@ class DSPyRemediationDriver:
         return [snippet for snippet in snippets if snippet]
 
     @staticmethod
+    def _collect_graph_sections(candidate: Mapping[str, Any]) -> Dict[str, Any]:
+        graph_sections: Dict[str, Any] = {}
+        for key, value in candidate.items():
+            if not isinstance(key, str):
+                continue
+            if "graph" in key.lower() and value not in (None, ""):
+                graph_sections[key] = value
+        return graph_sections
+
+    def _extract_semgrep_graph_context(self, finding: Mapping[str, Any]) -> Dict[str, Any]:
+        graph_context: Dict[str, Any] = {}
+        extra = finding.get("extra")
+        if isinstance(extra, Mapping):
+            graph_context.update(self._collect_graph_sections(extra))
+            metadata = extra.get("metadata")
+            if isinstance(metadata, Mapping):
+                metadata_graph = self._collect_graph_sections(metadata)
+                if metadata_graph:
+                    graph_context.setdefault("metadata", {}).update(metadata_graph)
+
+        for key in ("dataflow_traces", "dataflow_trace", "taint_traces"):
+            value = finding.get(key)
+            if value not in (None, ""):
+                graph_context[key] = value
+
+        return graph_context
+
+    @staticmethod
     def _make_vulnerability_id(
         finding: Mapping[str, Any],
         node_id: Optional[str],
@@ -152,12 +181,17 @@ class DSPyRemediationDriver:
             if not isinstance(node_context, Mapping):
                 node_context = {}
             snippets = self._collect_snippets(finding, node_context)
+            semgrep_graph_context = self._extract_semgrep_graph_context(finding)
+            sanitized_finding = json.loads(json.dumps(dict(finding)))
             graph_context = {
                 "node_id": node_id,
                 "match_confidence": entry.get("match_confidence"),
                 "matched_attributes": entry.get("matched_attributes", {}),
                 "context": dict(node_context),
             }
+            if semgrep_graph_context:
+                graph_context["semgrep_graph_context"] = semgrep_graph_context
+            graph_context["semgrep_finding"] = sanitized_finding
             vulnerability_id = self._make_vulnerability_id(finding, node_id, index)
             context = VulnerabilityContext(
                 vulnerability_id=vulnerability_id,
@@ -179,6 +213,7 @@ class DSPyRemediationDriver:
                 match_confidence=confidence_text,
                 matched_attributes=dict(matched_attrs),
                 node_context=dict(node_context),
+                semgrep_graph_context=semgrep_graph_context or None,
             )
         return contexts, bundles
 
@@ -235,6 +270,15 @@ class DSPyRemediationDriver:
                 node_summary = bundle.node_context.get("summary")
                 if isinstance(node_summary, str) and node_summary:
                     lines.append(f"- **Node Summary**: {node_summary}")
+                if bundle.semgrep_graph_context:
+                    lines.extend(
+                        [
+                            "- **Knowledge Graph Context**:",
+                            "```json",
+                            json.dumps(bundle.semgrep_graph_context, indent=2, sort_keys=True),
+                            "```",
+                        ]
+                    )
                 lines.append("")
 
                 vuln_proposals = proposals_by_vuln.get(vulnerability_id, [])
