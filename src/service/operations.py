@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import shlex
 import shutil
 import subprocess
@@ -36,6 +37,8 @@ from semgrep_runner import (
 
 
 LOGGER = logging.getLogger("mcp_scanner.service.operations")
+
+_ENV_ASSIGNMENT = re.compile(r"^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$")
 
 
 def _format_command(command: Sequence[str]) -> str:
@@ -87,7 +90,7 @@ def _sanitize_remote(remote_url: str | None) -> str:
 
 
 def _normalize_github_token(token: Optional[str]) -> Optional[str]:
-    """Strip whitespace from ``token`` and treat empty strings as missing."""
+    """Normalize ``token`` by trimming whitespace and surrounding quotes."""
 
     if token is None:
         return None
@@ -95,7 +98,114 @@ def _normalize_github_token(token: Optional[str]) -> Optional[str]:
     normalized = token.strip()
     if not normalized:
         return None
+
+    if len(normalized) >= 2 and normalized[0] == normalized[-1] and normalized[0] in {'"', "'"}:
+        normalized = normalized[1:-1].strip()
+
+    if not normalized:
+        return None
     return normalized
+
+
+def _parse_env_assignment(line: str) -> Optional[Tuple[str, str]]:
+    """Parse a ``KEY=VALUE`` assignment from ``line`` if present."""
+
+    match = _ENV_ASSIGNMENT.match(line)
+    if not match:
+        return None
+
+    key, raw_value = match.groups()
+    key = key.strip()
+    if not key:
+        return None
+
+    value = raw_value.strip()
+    if not value:
+        return key, ""
+
+    if value[0] in {'"', "'"}:
+        quote = value[0]
+        if value.endswith(quote) and len(value) > 1:
+            value = value[1:-1]
+        else:
+            value = value[1:]
+        return key, value.strip()
+
+    comment_index = None
+    for delimiter in (" #", "\t#"):
+        idx = value.find(delimiter)
+        if idx != -1:
+            comment_index = idx
+            break
+    if comment_index is None:
+        hash_index = value.find("#")
+        if hash_index != -1 and (hash_index == 0 or value[hash_index - 1].isspace()):
+            comment_index = hash_index
+    if comment_index is not None:
+        value = value[:comment_index]
+
+    return key, value.strip()
+
+
+def _load_github_token_from_env_file() -> Tuple[Optional[str], Optional[Path]]:
+    """Attempt to read ``GITHUB_TOKEN`` from ``.env`` style files."""
+
+    env_file_override = os.environ.get("MCP_ENV_FILE")
+    candidates: List[Path] = []
+    if env_file_override:
+        candidates.append(Path(env_file_override))
+    candidates.append(Path(".env"))
+
+    seen: set[Path] = set()
+    for candidate in candidates:
+        normalized = candidate if candidate.is_absolute() else Path.cwd() / candidate
+        if normalized in seen:
+            continue
+        seen.add(normalized)
+        try:
+            content = normalized.read_text(encoding="utf-8")
+        except FileNotFoundError:
+            continue
+        except OSError as exc:  # pragma: no cover - filesystem errors are rare
+            LOGGER.warning("Unable to read %s: %s", normalized, exc)
+            continue
+
+        for line in content.splitlines():
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#"):
+                continue
+            assignment = _parse_env_assignment(stripped)
+            if not assignment:
+                continue
+            key, value = assignment
+            if key == "GITHUB_TOKEN":
+                return value.strip(), normalized
+
+    return None, None
+
+
+def resolve_github_token(explicit_token: Optional[str] = None) -> Optional[str]:
+    """Return the best available GitHub token from explicit, env, or ``.env`` sources."""
+
+    sources = [
+        (explicit_token, "explicit parameter"),
+        (os.environ.get("GITHUB_TOKEN"), "GITHUB_TOKEN env"),
+        (os.environ.get("MCP_GITHUB_TOKEN"), "MCP_GITHUB_TOKEN env"),
+    ]
+
+    for candidate, source in sources:
+        token = _normalize_github_token(candidate)
+        if token:
+            LOGGER.info("Using GitHub token from %s", source)
+            return token
+
+    env_token, env_path = _load_github_token_from_env_file()
+    token = _normalize_github_token(env_token)
+    if token and env_path:
+        LOGGER.info("Using GitHub token from %s", env_path)
+        return token
+
+    return None
 
 
 def _normalize_git_username(username: Optional[str]) -> Optional[str]:
@@ -909,7 +1019,7 @@ def push_remediation_branch(
     if not branch_name:
         return PushResult(status="skipped", reason="no branch provided")
 
-    token = _normalize_github_token(token if token is not None else os.environ.get("GITHUB_TOKEN"))
+    token = resolve_github_token(token)
     if not token:
         LOGGER.warning("Skipping push for %s: no GITHUB_TOKEN provided", branch_name)
         return PushResult(status="skipped", branch=branch_name, reason="GITHUB_TOKEN not provided")
@@ -984,7 +1094,7 @@ def open_remediation_pull_request(
         LOGGER.warning("Skipping pull request creation: no commits available")
         return PullRequestResult(status="skipped", reason="no commits to include")
 
-    token = _normalize_github_token(token if token is not None else os.environ.get("GITHUB_TOKEN"))
+    token = resolve_github_token(token)
     if not token:
         LOGGER.warning("Skipping pull request creation: no GITHUB_TOKEN provided")
         return PullRequestResult(status="skipped", reason="GITHUB_TOKEN not provided")
@@ -1277,16 +1387,9 @@ def perform_scan(
         create_pr,
     )
 
+    github_token = resolve_github_token(github_token)
     if github_token is None:
-        github_token = os.environ.get("GITHUB_TOKEN")
-        if github_token:
-            LOGGER.info("Using GitHub token from environment for authentication")
-        else:
-            LOGGER.warning("GitHub token not provided; push/PR steps may be skipped")
-
-    github_token = _normalize_github_token(github_token)
-    if github_token is None:
-        LOGGER.warning("GitHub token unavailable after normalization; push/PR steps may be skipped")
+        LOGGER.warning("GitHub token unavailable; push/PR steps may be skipped")
 
     artifact_root = Path(tempfile.mkdtemp(prefix="mcp-scan-artifacts-"))
     LOGGER.info("Artifacts will be persisted under %s", artifact_root)

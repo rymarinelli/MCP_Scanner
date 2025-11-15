@@ -32,7 +32,7 @@ def _default_patch_program(*, repo_root: Path | None = None) -> PatchSuggestionP
 
         return HuggingFacePatchSuggestionProgram(model_name=settings_model)
 
-    return PatchSuggestionProgram()
+    return PatchSuggestionProgram(repo_root=repo_root)
 from .models import PatchProposal, ValidationResult, VulnerabilityContext, ensure_directory
 
 

@@ -10,7 +10,7 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import Any, Dict, Sequence, Tuple
 
-from .operations import ScanExecutionError, perform_scan
+from .operations import ScanExecutionError, perform_scan, resolve_github_token
 
 LOGGER = logging.getLogger("mcp_scanner.service")
 
@@ -141,11 +141,7 @@ class MCPRequestHandler(BaseHTTPRequestHandler):
             )
             return
 
-        github_token = (
-            github_token_input
-            if github_token_input is not None
-            else os.environ.get("GITHUB_TOKEN")
-        )
+        github_token = resolve_github_token(github_token_input)
 
         try:
             result = SCAN_HANDLER(

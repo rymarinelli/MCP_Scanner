@@ -36,6 +36,7 @@ from service.operations import (
     generate_remediations,
     perform_scan,
     run_semgrep_scan,
+    resolve_github_token,
     _parse_repo_slug,
 )
 
@@ -923,6 +924,27 @@ def test_authenticated_remote_candidates_include_repo_owner(monkeypatch: pytest.
 def test_normalize_github_token() -> None:
     assert _normalize_github_token("  ghp_secret\n") == "ghp_secret"
     assert _normalize_github_token("\n\t  ") is None
+    assert _normalize_github_token('"ghp_wrapped"') == "ghp_wrapped"
+    assert _normalize_github_token("'quoted-token'") == "quoted-token"
+
+
+def test_resolve_github_token_prefers_explicit(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("GITHUB_TOKEN", "env_secret")
+    monkeypatch.setenv("MCP_GITHUB_TOKEN", "mcp_secret")
+    token = resolve_github_token("explicit_secret")
+    assert token == "explicit_secret"
+
+
+def test_resolve_github_token_reads_env_file(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    env_file = tmp_path / "custom.env"
+    env_file.write_text("# comment\nGITHUB_TOKEN='file_secret'\nOTHER=value\n", encoding="utf-8")
+
+    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+    monkeypatch.delenv("MCP_GITHUB_TOKEN", raising=False)
+    monkeypatch.setenv("MCP_ENV_FILE", str(env_file))
+
+    token = resolve_github_token()
+    assert token == "file_secret"
 
 
 @pytest.mark.parametrize(
