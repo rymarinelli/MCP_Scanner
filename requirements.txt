@@ -6,3 +6,4 @@ rich==13.5.2
 mcp==1.17.0
 fastmcp==2.13.0.2
 semgrep==1.141.1
+dspy-ai>=3.0.4
