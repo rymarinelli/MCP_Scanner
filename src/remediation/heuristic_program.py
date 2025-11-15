@@ -3,6 +3,7 @@ from __future__ import annotations
 import ast
 import difflib
 import json
+import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -242,7 +243,7 @@ class HeuristicPatchSuggestionProgram:
         if updated_lines == lines:
             return None
 
-        diff = self._build_diff(source_path, lines, updated_lines)
+        diff = self._build_diff(file_path, lines, updated_lines)
         return {
             "file_path": file_path,
             "diff": diff,
@@ -299,7 +300,7 @@ class HeuristicPatchSuggestionProgram:
         if updated_lines == lines:
             return None
 
-        diff = self._build_diff(source_path, lines, updated_lines)
+        diff = self._build_diff(file_path, lines, updated_lines)
         return {
             "file_path": file_path,
             "diff": diff,
@@ -308,12 +309,22 @@ class HeuristicPatchSuggestionProgram:
         }
 
     @staticmethod
-    def _build_diff(path: Path, original: Sequence[str], updated: Sequence[str]) -> str:
+    def _build_diff(relative_path: str, original: Sequence[str], updated: Sequence[str]) -> str:
+        """Build a unified diff using repository-relative paths."""
+
+        rel_path = Path(relative_path)
+        try:
+            normalized = rel_path.as_posix()
+        except Exception:  # pragma: no cover - defensive fallback
+            normalized = str(rel_path).replace(os.sep, "/")
+        if not normalized:
+            normalized = rel_path.name or "file"
+
         diff_lines = difflib.unified_diff(
             [line + "\n" for line in original],
             [line + "\n" for line in updated],
-            fromfile=str(path),
-            tofile=str(path),
+            fromfile=f"a/{normalized}",
+            tofile=f"b/{normalized}",
         )
         return "".join(diff_lines)
 
