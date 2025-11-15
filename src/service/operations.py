@@ -98,6 +98,25 @@ def _normalize_github_token(token: Optional[str]) -> Optional[str]:
     return normalized
 
 
+def _normalize_git_username(username: Optional[str]) -> Optional[str]:
+    """Normalize ``username`` by trimming whitespace and surrounding quotes."""
+
+    if username is None:
+        return None
+
+    normalized = username.strip()
+    if not normalized:
+        return None
+
+    if len(normalized) >= 2 and normalized[0] == normalized[-1] and normalized[0] in {'"', "'"}:
+        normalized = normalized[1:-1].strip()
+
+    if not normalized:
+        return None
+
+    return normalized
+
+
 class ScanExecutionError(RuntimeError):
     """Raised when a step in the scan workflow fails."""
 
@@ -815,13 +834,16 @@ def _authenticated_remote_candidates(repo_url: str, token: str | None) -> List[s
     _add_candidate(f"x-access-token:{encoded_token}@{netloc}")
 
     username_hints: List[str] = []
-    env_username = os.environ.get("GIT_USER") or os.environ.get("GITHUB_ACTOR")
+    env_username = _normalize_git_username(
+        os.environ.get("GIT_USER") or os.environ.get("GITHUB_ACTOR")
+    )
     if env_username:
         username_hints.append(env_username)
 
     slug = _parse_repo_slug(repo_url)
     if slug:
         owner, _ = slug
+        owner = _normalize_git_username(owner)
         if owner:
             username_hints.append(owner)
 

@@ -21,6 +21,7 @@ from service.operations import (
     _authenticated_remote_candidates,
     _looks_like_patch,
     _normalize_github_token,
+    _normalize_git_username,
     _normalize_patch_text,
     _sanitize_remote,
     CommitApplicationResult,
@@ -899,9 +900,32 @@ def test_authenticated_remote_candidates_strip_whitespace(monkeypatch: pytest.Mo
     assert candidates[-1] == "https://ghp_secret@github.com/example/project.git"
 
 
+def test_authenticated_remote_candidates_strip_wrapping_quotes(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("GIT_USER", '"security-bot"')
+    candidates = _authenticated_remote_candidates(
+        "https://github.com/example/project.git", "ghp_secret"
+    )
+    assert "https://security-bot:ghp_secret@github.com/example/project.git" in candidates
+
+
 def test_normalize_github_token() -> None:
     assert _normalize_github_token("  ghp_secret\n") == "ghp_secret"
     assert _normalize_github_token("\n\t  ") is None
+
+
+@pytest.mark.parametrize(
+    "raw, expected",
+    [
+        (None, None),
+        ("", None),
+        ("  security-bot  ", "security-bot"),
+        ("'quoted-bot'", "quoted-bot"),
+        ('"quoted-bot"', "quoted-bot"),
+        ('""nested""', '"nested"'),
+    ],
+)
+def test_normalize_git_username(raw: str | None, expected: str | None) -> None:
+    assert _normalize_git_username(raw) == expected
 
 
 def test_sanitize_remote_preserves_scheme_and_username() -> None:
