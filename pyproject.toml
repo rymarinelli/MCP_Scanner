@@ -17,6 +17,7 @@ dependencies = [
   "pydantic-settings>=2.0",
   "torch>=2.1",
   "transformers>=4.38",
+  "dspy-ai>=3.0.4",
 ]
 
 [project.optional-dependencies]
