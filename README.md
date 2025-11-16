@@ -120,27 +120,28 @@ the locally hosted model instead of relying on a remote API. You can substitute
 `deepseek-ai/deepseek-coder-1.3b-instruct`) if memory is constrained. The first
 run will download the model weights to the local Hugging Face cache.
 
-## Requiring DSPy-backed fixes
+## Toggling DSPy-backed fixes
 
-The remediation pipeline now insists on the full DSPy stack so that fixes come
-from your configured LLM rather than the heuristic fallback. Install DSPy
-before kicking off a scan—for example, grab the latest commit from the official
-repository:
+The remediation pipeline automatically uses DSPy when it is installed and falls
+back to the heuristic patch generator when the dependency is missing. Install
+DSPy before kicking off a scan—for example, grab the latest commit from the
+official repository:
 
 ```bash
 pip install -U "git+https://github.com/stanfordnlp/dspy"
 ```
 
-If you intentionally want to allow heuristics (for example, when running in a
-CI environment that cannot compile DSPy), explicitly disable the requirement:
+If you want to enforce DSPy-backed fixes (for example, in environments where
+the heuristics should never run), set the `MCP_REQUIRE_DSPY` flag. The
+remediation stage raises an error unless DSPy is importable when the flag is
+truthy:
 
 ```bash
-export MCP_REQUIRE_DSPY=0
+export MCP_REQUIRE_DSPY=1
 ```
 
-When the flag is unset—or set to any truthy value—the remediation stage raises
-an error unless DSPy is importable, ensuring every scan leans on the LLM-backed
-patch suggester instead of placeholder diffs.
+Unset the variable—or explicitly assign `0`—to allow the heuristics to run when
+DSPy is unavailable.
 
 ## Running the HTTP service via Docker
 

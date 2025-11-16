@@ -217,7 +217,7 @@ def test_run_semgrep_scan_falls_back_when_remote_config_unavailable(
 def test_generate_remediations_creates_summary(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setenv("MCP_REQUIRE_DSPY", "0")
+    monkeypatch.delenv("MCP_REQUIRE_DSPY", raising=False)
     output = RunnerOutput(
         status="ok",
         normalized_exit_code=0,
@@ -263,7 +263,7 @@ def test_generate_remediations_requires_dspy_when_requested(
     repo_path.mkdir()
 
     monkeypatch.setenv("MCP_REQUIRE_DSPY", "1")
-    with pytest.raises(ScanExecutionError, match="DSPy is required"):
+    with pytest.raises(ScanExecutionError, match="MCP_REQUIRE_DSPY is set"):
         generate_remediations(output, tmp_path, rag_context_path, repo_path)
 
 
