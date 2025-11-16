@@ -18,12 +18,14 @@ if str(PROJECT_ROOT) not in sys.path:
 from semgrep_runner import RunnerConfig, RunnerOutput
 
 from service.operations import (
+    _GITHUB_PR_BODY_LIMIT,
     _authenticated_remote_candidates,
     _looks_like_patch,
     _normalize_github_token,
     _normalize_git_username,
     _normalize_patch_text,
     _sanitize_remote,
+    _truncate_pull_request_body,
     CommitApplicationResult,
     CommitRecord,
     PullRequestResult,
@@ -35,6 +37,7 @@ from service.operations import (
     push_remediation_branch,
     generate_remediations,
     perform_scan,
+    open_remediation_pull_request,
     run_semgrep_scan,
     resolve_github_token,
     _parse_repo_slug,
@@ -1005,3 +1008,63 @@ def test_push_remediation_branch_retries_with_alternate_credentials(
     assert len(set_url_commands) >= 2
     assert any("security-bot:ghp_secret" in cmd[-1] for cmd in set_url_commands)
 
+
+def test_truncate_pull_request_body_noop_when_within_limit() -> None:
+    body = "Short summary"
+    assert _truncate_pull_request_body(body) == body
+
+
+def test_truncate_pull_request_body_truncates_and_appends_notice() -> None:
+    body = "a" * (_GITHUB_PR_BODY_LIMIT + 123)
+    truncated = _truncate_pull_request_body(body)
+    assert len(truncated) == _GITHUB_PR_BODY_LIMIT
+    assert "truncated to meet GitHub's 65,536 character limit" in truncated
+    assert truncated.endswith("limit.*")
+
+
+def test_open_remediation_pull_request_truncates_body(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: Dict[str, Any] = {}
+
+    class DummyResponse:
+        def __init__(self) -> None:
+            self._payload = {"html_url": "https://example/pr/1", "number": 1}
+
+        def read(self) -> bytes:
+            return json.dumps(self._payload).encode("utf-8")
+
+        def __enter__(self) -> "DummyResponse":
+            return self
+
+        def __exit__(self, exc_type, exc, tb) -> None:
+            return None
+
+    def fake_urlopen(request, *args, **kwargs):  # type: ignore[no-redef]
+        payload = json.loads(request.data.decode("utf-8"))
+        captured["body"] = payload["body"]
+        captured["body_len"] = len(payload["body"])
+        return DummyResponse()
+
+    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
+
+    summary = "A" * (_GITHUB_PR_BODY_LIMIT + 500)
+    commits = [
+        CommitRecord(
+            vulnerability_id="VULN-1",
+            commit_sha="abcdef1",
+            message="Fix issue",
+            proposals=[],
+        )
+    ]
+
+    result = open_remediation_pull_request(
+        repo_url="https://github.com/example/repo",
+        branch_name="auto/remediation",
+        base_branch="main",
+        summary_markdown=summary,
+        commits=commits,
+        token="ghp_test",
+    )
+
+    assert result.status == "success"
+    assert captured["body_len"] == _GITHUB_PR_BODY_LIMIT
+    assert "truncated to meet GitHub's 65,536 character limit" in captured["body"]

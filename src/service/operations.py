@@ -38,6 +38,11 @@ from semgrep_runner import (
 
 LOGGER = logging.getLogger("mcp_scanner.service.operations")
 
+_GITHUB_PR_BODY_LIMIT = 65_536
+_PR_BODY_TRUNCATION_NOTICE = (
+    "\n\n*This pull request description was truncated to meet GitHub's 65,536 character limit.*"
+)
+
 _ENV_ASSIGNMENT = re.compile(r"^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$")
 
 
@@ -54,6 +59,23 @@ def _log_multiline(header: str, content: str | None) -> None:
         LOGGER.info("%s: <empty>", header)
         return
     LOGGER.info("%s:\n%s", header, content)
+
+
+def _truncate_pull_request_body(body: str, limit: int = _GITHUB_PR_BODY_LIMIT) -> str:
+    """Ensure ``body`` does not exceed GitHub's pull request description limit."""
+
+    if limit <= 0:
+        return ""
+
+    if len(body) <= limit:
+        return body
+
+    notice = _PR_BODY_TRUNCATION_NOTICE
+    if len(notice) >= limit:
+        return notice[:limit]
+
+    truncated = body[: limit - len(notice)].rstrip()
+    return f"{truncated}{notice}"
 
 
 def _json_for_logging(payload: object) -> str:
@@ -1124,6 +1146,13 @@ def open_remediation_pull_request(
         body_sections.extend(["", "## Commits", commit_lines])
 
     body = "\n".join(body_sections).strip() or "Automated remediation proposals."
+    truncated_body = _truncate_pull_request_body(body)
+    if truncated_body != body:
+        LOGGER.warning(
+            "Pull request description exceeded GitHub's %s character limit and was truncated",
+            _GITHUB_PR_BODY_LIMIT,
+        )
+    body = truncated_body
     payload = json.dumps(
         {
             "title": title,
