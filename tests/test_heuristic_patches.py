@@ -93,6 +93,52 @@ def _write_insecure_llm_examples(tmp_path: Path) -> Path:
     return source
 
 
+def _write_sql_injection_app(tmp_path: Path) -> Path:
+    source = tmp_path / "app_vuln.py"
+    source.write_text(
+        dedent(
+            """
+            from flask import Flask, request, render_template_string
+
+            app = Flask(__name__)
+
+            SEARCH_HTML = "search"
+            LOGIN_HTML = "login"
+
+            def get_db():
+                ...
+
+            def search():
+                q = request.args.get("q", "")
+                results = None
+                if q:
+                    db = get_db()
+                    cur = db.cursor()
+                    sql = "SELECT id, username FROM users WHERE username LIKE '%" + q + "%';"
+                    cur.execute(sql)
+                    results = cur.fetchall()
+                return render_template_string(SEARCH_HTML, results=results)
+
+
+            def login():
+                user = None
+                if request.method == "POST":
+                    username = request.form.get("username", "")
+                    password = request.form.get("password", "")
+                    db = get_db()
+                    cur = db.cursor()
+                    sql = f"SELECT id, username FROM users WHERE username = '{username}' AND password = '{password}' LIMIT 1;"
+                    cur.execute(sql)
+                    row = cur.fetchone()
+                    user = row
+                return render_template_string(LOGIN_HTML, user=user)
+            """
+        ).strip(),
+        encoding="utf-8",
+    )
+    return source
+
+
 def test_generator_disables_flask_debug(tmp_path: Path) -> None:
     _write_flask_app(tmp_path)
 
@@ -171,3 +217,18 @@ def test_os_system_requires_allowlist(tmp_path: Path) -> None:
     patch = generator.generate(context)[0]
     assert "allowed_binaries" in patch["diff"]
     assert "shlex.split" in patch["diff"]
+
+
+def test_sql_injection_handlers_are_parameterized(tmp_path: Path) -> None:
+    source = _write_sql_injection_app(tmp_path)
+    generator = HeuristicPatchGenerator(repo_root=tmp_path)
+    context = make_llm_context(
+        "python.flask.security.injection.tainted-sql-string.tainted-sql-string",
+        source.name,
+        """sql = "SELECT id, username FROM users WHERE username LIKE '%" + q + "%';""",
+    )
+
+    patch = generator.generate(context)[0]
+    assert "LIKE ?" in patch["diff"]
+    assert "cur.execute(sql, (like_pattern,))" in patch["diff"]
+    assert "AND password = ? LIMIT 1" in patch["diff"]
