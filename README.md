@@ -122,18 +122,25 @@ run will download the model weights to the local Hugging Face cache.
 
 ## Requiring DSPy-backed fixes
 
-By default the remediation pipeline falls back to heuristic patches when DSPy
-is not installed. If you want the scan to fail rather than emit placeholder
-diffs, set the `MCP_REQUIRE_DSPY` flag before invoking the service:
+The remediation pipeline now insists on the full DSPy stack so that fixes come
+from your configured LLM rather than the heuristic fallback. Install DSPy
+before kicking off a scan—for example, grab the latest commit from the official
+repository:
 
 ```bash
-export MCP_REQUIRE_DSPY=1
+pip install -U "git+https://github.com/stanfordnlp/dspy"
 ```
 
-With the flag enabled the remediation stage raises an error unless the optional
-`dspy-ai` package is available. Install it via `pip install dspy-ai` (or
-`pip install -e .[dev]`) so the DSPy programs can call into your configured LLM
-and produce real code changes for the scanned repository.
+If you intentionally want to allow heuristics (for example, when running in a
+CI environment that cannot compile DSPy), explicitly disable the requirement:
+
+```bash
+export MCP_REQUIRE_DSPY=0
+```
+
+When the flag is unset—or set to any truthy value—the remediation stage raises
+an error unless DSPy is importable, ensuring every scan leans on the LLM-backed
+patch suggester instead of placeholder diffs.
 
 ## Running the HTTP service via Docker
 

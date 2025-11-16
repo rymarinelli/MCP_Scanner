@@ -1352,10 +1352,12 @@ def generate_remediations(
     LOGGER.info("Semgrep findings saved to %s", findings_path)
 
     suggester = RemediationSuggester(output_dir=workspace / "remediations", repo_root=repo_path)
-    if _env_flag("MCP_REQUIRE_DSPY") and not getattr(suggester.program, "uses_dspy", False):
+    require_dspy = _env_flag("MCP_REQUIRE_DSPY", default=True)
+    if require_dspy and not getattr(suggester.program, "uses_dspy", False):
         raise ScanExecutionError(
             "DSPy is required for remediation (set MCP_REQUIRE_DSPY=0 to allow heuristics). "
-            "Install the optional dependency with 'pip install dspy-ai' before rerunning."
+            'Install DSPy before rerunning, e.g. `pip install -U "git+https://github.com/stanfordnlp/dspy"`. '
+            "The command from a virtual environment ensures the DSPy modules can import the configured LLM."
         )
     LOGGER.info(
         "Initializing DSPy remediation driver (output_markdown=%s)",

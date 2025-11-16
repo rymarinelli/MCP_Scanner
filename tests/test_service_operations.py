@@ -214,7 +214,10 @@ def test_run_semgrep_scan_falls_back_when_remote_config_unavailable(
     assert skipped == ["owasp-top-ten"]
 
 
-def test_generate_remediations_creates_summary(tmp_path: Path) -> None:
+def test_generate_remediations_creates_summary(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("MCP_REQUIRE_DSPY", "0")
     output = RunnerOutput(
         status="ok",
         normalized_exit_code=0,
