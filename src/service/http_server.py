@@ -15,6 +15,7 @@ from .operations import ScanExecutionError, perform_scan, resolve_github_token
 LOGGER = logging.getLogger("mcp_scanner.service")
 
 SCAN_HANDLER = perform_scan
+MAX_REQUEST_BODY_BYTES = 1_048_576  # 1 MiB limit to mitigate request flooding
 
 
 def _json_response(payload: Dict[str, Any]) -> bytes:
@@ -69,6 +70,17 @@ class MCPRequestHandler(BaseHTTPRequestHandler):
             length = int(content_length)
         except ValueError:
             self._send_error(HTTPStatus.BAD_REQUEST, "Invalid Content-Length header")
+            return {}, False
+
+        if length <= 0:
+            self._send_error(HTTPStatus.BAD_REQUEST, "Content-Length must be a positive integer")
+            return {}, False
+
+        if length > MAX_REQUEST_BODY_BYTES:
+            self._send_error(
+                HTTPStatus.REQUEST_ENTITY_TOO_LARGE,
+                f"Request body exceeds {MAX_REQUEST_BODY_BYTES} bytes",
+            )
             return {}, False
 
         raw_body = self.rfile.read(length)
