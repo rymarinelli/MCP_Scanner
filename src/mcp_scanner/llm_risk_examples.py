@@ -6,6 +6,7 @@ import os
 import shlex
 import subprocess
 import textwrap
+import unicodedata
 from typing import Callable, Mapping, Protocol, Sequence
 from urllib.parse import urlparse
 
@@ -32,13 +33,26 @@ Runner = Callable[[Sequence[str]], int]
 def _sanitize_user_input(user_input: str) -> str:
     """Return a bounded, sanitised representation of ``user_input``."""
 
-    normalized = user_input.replace("\r\n", "\n").replace("\r", "\n")
+    normalized = unicodedata.normalize("NFKC", user_input)
+    normalized = normalized.replace("\r\n", "\n").replace("\r", "\n")
     normalized = normalized.replace("```", "'''")
-    collapsed = "\n".join(line.strip() for line in normalized.splitlines())
-    collapsed = collapsed.strip()
+    printable_lines: list[str] = []
+    for line in normalized.splitlines():
+        stripped = "".join(ch for ch in line if ch.isprintable()).strip()
+        if stripped:
+            printable_lines.append(stripped)
+    collapsed = "\n".join(printable_lines).strip()
     if len(collapsed) > MAX_USER_INPUT_LENGTH:
         return collapsed[:MAX_USER_INPUT_LENGTH]
     return collapsed
+
+
+def _quote_lines(user_input: str) -> str:
+    """Indent each line so untrusted content renders as a block quote."""
+
+    if not user_input:
+        return ""
+    return textwrap.indent(user_input, prefix="> ")
 
 
 def build_prompt(user_input: str, *, system_prompt: str = "You are a helpful AI") -> str:
@@ -47,7 +61,7 @@ def build_prompt(user_input: str, *, system_prompt: str = "You are a helpful AI"
     sanitized_input = _sanitize_user_input(user_input)
     if not sanitized_input:
         sanitized_input = "[no user input provided]"
-    quoted = textwrap.indent(sanitized_input, prefix="> ")
+    quoted = _quote_lines(sanitized_input)
     prompt = f"{system_prompt}\n\nUser instruction (sanitized):\n{quoted}"
     return prompt
 
@@ -65,9 +79,12 @@ def _resolve_command(
     if not parts:
         raise ValueError("Command must not be empty")
 
-    allowlist = allowed_commands or {}
+    allowlist = dict(allowed_commands or {})
+    if not allowlist:
+        raise ValueError("allowed_commands must contain at least one permitted entry")
+
     canonical = allowlist.get(parts[0])
-    if canonical is None:
+    if not canonical:
         raise ValueError(f"Command '{parts[0]}' is not permitted")
 
     return list(canonical) + parts[1:]
@@ -118,7 +135,10 @@ def dispatch_with_os_system(
 ) -> int:
     """Execute a shell-free, allow-listed script invocation."""
 
-    allowed = set(allowed_binaries or ())
+    if not allowed_binaries:
+        raise ValueError("allowed_binaries must contain at least one executable")
+
+    allowed = set(allowed_binaries)
     command = shlex.split(llm_script.strip(), posix=True)
     if not command:
         raise ValueError("Command must not be empty")
