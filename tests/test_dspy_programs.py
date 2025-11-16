@@ -65,13 +65,37 @@ def _install_stub_dspy(monkeypatch: pytest.MonkeyPatch) -> ModuleType:
 
         def __call__(self, **kwargs):  # type: ignore[no-untyped-def]
             del kwargs
-            payload = [
-                {
-                    "file_path": "file.py",
-                    "diff": "--- a/file.py\n+++ b/file.py\n+print('patched')\n",
-                    "rationale": "stub",
-                }
-            ]
+            diff_text = "\n".join(
+                [
+                    "diff --git a/file.py b/file.py",
+                    "--- a/file.py",
+                    "+++ b/file.py",
+                    "@@",
+                    "-print('hello')",
+                    "+print('patched')",
+                    "diff --git a/second.py b/second.py",
+                    "--- a/second.py",
+                    "+++ b/second.py",
+                    "@@",
+                    "-return 1",
+                    "+return 2",
+                ]
+            ) + "\n"
+            payload = {
+                "commits": [
+                    {
+                        "id": "stub-commit",
+                        "title": "fix: stub patch",
+                        "message": "fix: stub patch\n\n- replace prints\n- adjust math",
+                        "touched_findings": ["TEST-1"],
+                        "patch": diff_text,
+                    }
+                ],
+                "pull_request": {
+                    "title": "stub",
+                    "body_markdown": "## Summary\n- stub",
+                },
+            }
             return SimpleNamespace(patches=json.dumps(payload))
 
     stub.Signature = Signature  # type: ignore[attr-defined]
@@ -95,5 +119,7 @@ def test_program_switches_to_dspy_when_module_installed(monkeypatch: pytest.Monk
     assert second.uses_dspy is True
 
     response = second.forward(_make_context())
-    assert response.patches[0]["file_path"] == "file.py"
+    paths = {patch["file_path"] for patch in response.patches}
+    assert paths == {"file.py", "second.py"}
+    assert all("stub patch" in patch["rationale"] for patch in response.patches)
     assert dspy_is_available() is True

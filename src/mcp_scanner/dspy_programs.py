@@ -6,8 +6,9 @@ import importlib
 import json
 from dataclasses import dataclass
 from pathlib import Path
+from textwrap import dedent
 from types import ModuleType
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Dict, Iterable, List, Optional, Sequence, Tuple
 
 from .models import PatchProposal, VulnerabilityContext
 from remediation.heuristic_patches import HeuristicPatchGenerator
@@ -61,6 +62,95 @@ class DSPyResponse:
     raw_output: Optional[str] = None
 
 
+def _split_diff_by_file(diff_text: str) -> List[Tuple[str, str]]:
+    """Split a unified diff string into (file_path, diff) tuples."""
+
+    if not diff_text.strip():
+        return []
+
+    blocks: List[Tuple[str, str]] = []
+    current_lines: List[str] = []
+    current_path = ""
+
+    def flush() -> None:
+        if not current_lines:
+            return
+        block_text = "\n".join(current_lines)
+        if not block_text.endswith("\n"):
+            block_text += "\n"
+        blocks.append((current_path, block_text))
+
+    for line in diff_text.splitlines():
+        if line.startswith("diff --git "):
+            flush()
+            current_lines = [line]
+            parts = line.split()
+            if len(parts) >= 4 and parts[3].startswith("b/"):
+                current_path = parts[3][2:]
+            elif len(parts) >= 3 and parts[2].startswith("a/"):
+                current_path = parts[2][2:]
+            else:
+                current_path = ""
+            continue
+
+        current_lines.append(line)
+        if line.startswith("+++ b/"):
+            candidate = line[6:].strip()
+            if candidate != "/dev/null":
+                current_path = candidate
+        elif not current_path and line.startswith("--- a/"):
+            candidate = line[6:].strip()
+            if candidate != "/dev/null":
+                current_path = candidate
+
+    flush()
+    return [(path, diff) for path, diff in blocks if diff.strip()]
+
+
+def _patches_from_commits(payload: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Extract patch dictionaries from the structured commit payload."""
+
+    commits = payload.get("commits")
+    if not isinstance(commits, Sequence):
+        return []
+
+    global_notes = payload.get("rationale_markdown")
+    global_text = global_notes.strip() if isinstance(global_notes, str) else ""
+
+    patches: List[Dict[str, Any]] = []
+    for commit in commits:
+        if not isinstance(commit, dict):
+            continue
+        patch_text = commit.get("patch")
+        if not isinstance(patch_text, str) or not patch_text.strip():
+            continue
+
+        rationale_parts: List[str] = []
+        for field in ("message", "title"):
+            value = commit.get(field)
+            if isinstance(value, str) and value.strip():
+                rationale_parts.append(value.strip())
+
+        commit_notes = commit.get("rationale_markdown")
+        if isinstance(commit_notes, str) and commit_notes.strip():
+            rationale_parts.append(commit_notes.strip())
+
+        if global_text:
+            rationale_parts.append(global_text)
+
+        rationale = "\n\n".join(rationale_parts) if rationale_parts else "See commit description for details."
+        for file_path, diff in _split_diff_by_file(patch_text):
+            patches.append(
+                {
+                    "file_path": file_path or commit.get("file_path", ""),
+                    "diff": diff,
+                    "rationale": rationale,
+                }
+            )
+
+    return patches
+
+
 def _parse_json_output(text: str) -> List[Dict[str, Any]]:
     """Attempt to parse a JSON payload containing patch suggestions."""
 
@@ -69,9 +159,13 @@ def _parse_json_output(text: str) -> List[Dict[str, Any]]:
     except json.JSONDecodeError:
         return []
 
-    items = payload
     if isinstance(payload, dict):
+        commit_patches = _patches_from_commits(payload)
+        if commit_patches:
+            return commit_patches
         items = payload.get("patches", [])
+    else:
+        items = payload
 
     if not isinstance(items, list):
         return []
@@ -83,7 +177,55 @@ def _parse_json_output(text: str) -> List[Dict[str, Any]]:
     return result
 
 
-_DSPY_PROMPT = "You are an expert security engineer. Generate precise remediation patches."
+_DSPY_PROMPT = dedent(
+    """
+    You are a senior application security engineer AND long-term maintainer of the current
+    repository. Given repository context (languages, frameworks, notable patterns), sample
+    commit messages, and Semgrep findings with vulnerable code snippets, produce SMALL,
+    SAFE patches that directly remediate every finding.
+
+    =====================================
+    GOALS
+    =====================================
+    1. Fix the referenced vulnerabilities using idiomatic patterns for the repository.
+       - Prefer parameterized queries, validated inputs, secure configuration, and other
+         straightforward hardening techniques.
+       - Only change the lines necessary for the fix and preserve legitimate behavior.
+    2. Match the repository's coding conventions (indentation, quote style, logging).
+    3. Organize fixes into logical commits that a reviewer can easily merge.
+
+    =====================================
+    REQUIRED OUTPUT FORMAT (JSON)
+    =====================================
+    Always return a single JSON object with two top-level keys:
+      {
+        "commits": [
+          {
+            "id": "short-stable-id",
+            "title": "short commit title (<= 72 chars)",
+            "message": "multi-line commit message in repo style",
+            "touched_findings": ["F1", "F2"],
+            "patch": "UNIFIED DIFF APPLYABLE WITH git apply"
+          }
+        ],
+        "pull_request": {
+          "title": "short PR title summarizing fixes",
+          "body_markdown": "Markdown body with sections: Summary, Changes by Area, Security Impact,"
+                           " Risk if Unpatched, Testing, Notes"
+        }
+      }
+
+    =====================================
+    ADDITIONAL REQUIREMENTS
+    =====================================
+    - Each commit should reference the relevant finding ids in "touched_findings".
+    - Diffs must only touch the lines required for the remediation; do not reformat other code.
+    - When a finding cannot be safely auto-fixed, leave it untouched and mention the follow-up
+      in the PR "Notes" section instead of emitting speculative code.
+    - Prefer conservative, obviously correct fixes. Preserve the app's behavior for honest users.
+    - Return ONLY the JSON object—no prose outside the JSON payload.
+    """
+).strip()
 _HEURISTIC_PROMPT = "DSPy is unavailable; generating heuristic remediation suggestions."
 
 
