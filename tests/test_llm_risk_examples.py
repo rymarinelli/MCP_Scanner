@@ -17,6 +17,14 @@ def test_sanitize_user_input_bounds_length() -> None:
     assert "x" * (examples.MAX_USER_INPUT_LENGTH - 1) in sanitized
 
 
+def test_sanitize_user_input_strips_control_characters() -> None:
+    sanitized = examples._sanitize_user_input("line\x00one\nline\ttwo")
+    assert "\x00" not in sanitized
+    assert "\t" not in sanitized
+    assert "lineone" in sanitized
+    assert "linetwo" in sanitized
+
+
 def test_build_prompt_handles_empty_input() -> None:
     prompt = examples.build_prompt("  \n")
     assert "[no user input provided]" in prompt
@@ -43,6 +51,11 @@ def test_execute_tool_response_runs_runner() -> None:
     assert captured["args"] == ["echo", "hello"]
 
 
+def test_execute_tool_response_rejects_missing_allowlist() -> None:
+    with pytest.raises(ValueError):
+        examples.execute_tool_response("echo hello")
+
+
 def test_dispatch_with_os_system_enforces_allowlist() -> None:
     with pytest.raises(ValueError):
         examples.dispatch_with_os_system("python tool.py", allowed_binaries=["bash"])
@@ -64,6 +77,11 @@ def test_dispatch_with_os_system_runs_runner() -> None:
         == 0
     )
     assert captured["args"] == ["bash", "/tmp/script.sh"]
+
+
+def test_dispatch_with_os_system_requires_allowlist_entries() -> None:
+    with pytest.raises(ValueError):
+        examples.dispatch_with_os_system("bash /tmp/script.sh", allowed_binaries=[])
 
 
 class DummyResponse:

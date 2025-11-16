@@ -2,18 +2,34 @@
 
 from __future__ import annotations
 
+import importlib
 import json
 from dataclasses import dataclass
 from pathlib import Path
+from types import ModuleType
 from typing import Any, Dict, Iterable, List, Optional
 
 from .models import PatchProposal, VulnerabilityContext
 from remediation.heuristic_patches import HeuristicPatchGenerator
 
-try:  # pragma: no cover - import guard for optional dependency
-    import dspy
-except ImportError:  # pragma: no cover - fallback if DSPy is unavailable
-    dspy = None  # type: ignore[assignment]
+_DSPY_MODULE: ModuleType | None = None
+
+
+def _import_dspy() -> tuple[ModuleType | None, Optional[str]]:
+    """Attempt to import DSPy and return the module and any error string."""
+
+    global _DSPY_MODULE
+
+    if _DSPY_MODULE is not None:
+        return _DSPY_MODULE, None
+
+    try:  # pragma: no cover - import guard for optional dependency
+        module = importlib.import_module("dspy")
+    except Exception as exc:  # pragma: no cover - surface import reason
+        return None, f"{exc.__class__.__name__}: {exc}"
+
+    _DSPY_MODULE = module
+    return module, None
 
 
 def _format_dict(data: Dict[str, Any], prefix: str = "") -> str:
@@ -67,91 +83,109 @@ def _parse_json_output(text: str) -> List[Dict[str, Any]]:
     return result
 
 
-if dspy is not None:  # pragma: no cover - requires DSPy at runtime
+_DSPY_PROMPT = "You are an expert security engineer. Generate precise remediation patches."
+_HEURISTIC_PROMPT = "DSPy is unavailable; generating heuristic remediation suggestions."
 
-    class PatchSuggestionSignature(dspy.Signature):
-        """Signature instructing DSPy to emit structured remediation patches."""
 
-        instructions = dspy.InputField(desc="High level task description")
-        vulnerability_metadata = dspy.InputField(desc="Metadata describing the vulnerability")
-        graph_context = dspy.InputField(desc="Code/property graph insights relevant to the issue")
-        code_snippets = dspy.InputField(desc="Relevant code snippets", optional=True)
-        patches = dspy.OutputField(
-            desc=(
-                "JSON array of patch suggestions. Each entry must contain 'file_path', 'diff', "
-                "'rationale', and optional 'confidence'."
-            )
-        )
+class PatchSuggestionProgram:
+    """Program that delegates to DSPy when available and heuristics otherwise."""
 
-    class PatchSuggestionProgram(dspy.Module):
-        """DSPy module that generates remediation patches from vulnerability context."""
+    def __init__(
+        self,
+        *,
+        instructions: Optional[str] = None,
+        repo_root: Path | str | None = None,
+    ) -> None:
+        self.repo_root = Path(repo_root) if repo_root else None
+        self._dspy, self._import_error = _import_dspy()
+        self.uses_dspy = self._dspy is not None
 
-        def __init__(self, *, instructions: Optional[str] = None):
-            super().__init__()
-            self.instructions = instructions or (
-                "You are an expert security engineer. Generate precise remediation patches."
-            )
-            self.generator = dspy.Predict(PatchSuggestionSignature)
-
-        def forward(self, context: VulnerabilityContext) -> DSPyResponse:
-            prompt_metadata = _format_dict(context.metadata)
-            prompt_graph = _format_dict(context.graph_context)
-            snippets = "\n\n".join(context.code_snippets or [])
-
-            response = self.generator(
-                instructions=self.instructions,
-                vulnerability_metadata=prompt_metadata,
-                graph_context=prompt_graph,
-                code_snippets=snippets or None,
-            )
-
-            patches = _parse_json_output(response.patches)
-            return DSPyResponse(patches=patches, raw_output=response.patches)
-
-else:
-
-    class PatchSuggestionProgram:
-        """Fallback implementation when DSPy is unavailable."""
-
-        def __init__(
-            self,
-            *,
-            instructions: Optional[str] = None,
-            repo_root: Path | str | None = None,
-        ):
-            self.instructions = instructions or (
-                "DSPy is unavailable; generating heuristic remediation suggestions."
-            )
-            self.repo_root = Path(repo_root) if repo_root else None
+        if self.uses_dspy:
+            self.instructions = instructions or _DSPY_PROMPT
+            self._init_dspy_generator()
+            self.heuristics: HeuristicPatchGenerator | None = None
+        else:
+            message = instructions or _HEURISTIC_PROMPT
+            if instructions is None and self._import_error:
+                message = f"{message} ({self._import_error})"
+            self.instructions = message
             self.heuristics = HeuristicPatchGenerator(self.repo_root)
 
-        def forward(self, context: VulnerabilityContext) -> DSPyResponse:
-            heuristic_patches = self.heuristics.generate(context)
-            if heuristic_patches:
-                raw_output = json.dumps({"patches": heuristic_patches}, indent=2)
-                return DSPyResponse(patches=heuristic_patches, raw_output=raw_output)
+    def _init_dspy_generator(self) -> None:
+        """Initialize the DSPy signature and generator lazily."""
 
-            metadata_text = _format_dict(context.metadata)
-            graph_text = _format_dict(context.graph_context)
-            snippet_text = "\n\n".join(context.code_snippets or [])
+        assert self._dspy is not None  # Defensive: only called when DSPy is available
+        dspy = self._dspy
 
-            raw_output = json.dumps(
-                [
-                    {
-                        "file_path": "<unknown>",
-                        "diff": (
-                            "// Investigate vulnerability\n"
-                            f"// Metadata:\n{metadata_text}\n"
-                            f"// Graph Context:\n{graph_text}\n"
-                            + (f"// Code Snippets:\n{snippet_text}" if snippet_text else "")
-                        ),
-                        "rationale": self.instructions,
-                        "confidence": 0.0,
-                    }
-                ]
+        class PatchSuggestionSignature(dspy.Signature):  # type: ignore[valid-type]
+            """Signature instructing DSPy to emit structured remediation patches."""
+
+            instructions = dspy.InputField(desc="High level task description")
+            vulnerability_metadata = dspy.InputField(desc="Metadata describing the vulnerability")
+            graph_context = dspy.InputField(
+                desc="Code/property graph insights relevant to the issue"
             )
-            patches = _parse_json_output(raw_output)
-            return DSPyResponse(patches=patches, raw_output=raw_output)
+            code_snippets = dspy.InputField(desc="Relevant code snippets", optional=True)
+            patches = dspy.OutputField(
+                desc=(
+                    "JSON array of patch suggestions. Each entry must contain 'file_path', 'diff', "
+                    "'rationale', and optional 'confidence'."
+                )
+            )
+
+        self._signature = PatchSuggestionSignature
+        self.generator = dspy.Predict(PatchSuggestionSignature)
+
+    def forward(self, context: VulnerabilityContext) -> DSPyResponse:
+        if self._dspy is None:
+            return self._run_heuristics(context)
+        return self._run_dspy(context)
+
+    def _run_dspy(self, context: VulnerabilityContext) -> DSPyResponse:
+        assert self._dspy is not None
+        prompt_metadata = _format_dict(context.metadata)
+        prompt_graph = _format_dict(context.graph_context)
+        snippets = "\n\n".join(context.code_snippets or [])
+
+        response = self.generator(  # type: ignore[operator]
+            instructions=self.instructions,
+            vulnerability_metadata=prompt_metadata,
+            graph_context=prompt_graph,
+            code_snippets=snippets or None,
+        )
+
+        patches = _parse_json_output(response.patches)
+        raw_output = response.patches if isinstance(response.patches, str) else json.dumps(response.patches)
+        return DSPyResponse(patches=patches, raw_output=raw_output)
+
+    def _run_heuristics(self, context: VulnerabilityContext) -> DSPyResponse:
+        assert self.heuristics is not None
+        heuristic_patches = self.heuristics.generate(context)
+        if heuristic_patches:
+            raw_output = json.dumps({"patches": heuristic_patches}, indent=2)
+            return DSPyResponse(patches=heuristic_patches, raw_output=raw_output)
+
+        metadata_text = _format_dict(context.metadata)
+        graph_text = _format_dict(context.graph_context)
+        snippet_text = "\n\n".join(context.code_snippets or [])
+
+        raw_output = json.dumps(
+            [
+                {
+                    "file_path": "<unknown>",
+                    "diff": (
+                        "// Investigate vulnerability\n"
+                        f"// Metadata:\n{metadata_text}\n"
+                        f"// Graph Context:\n{graph_text}\n"
+                        + (f"// Code Snippets:\n{snippet_text}" if snippet_text else "")
+                    ),
+                    "rationale": self.instructions,
+                    "confidence": 0.0,
+                }
+            ]
+        )
+        patches = _parse_json_output(raw_output)
+        return DSPyResponse(patches=patches, raw_output=raw_output)
 
 
 def normalize_patches(
@@ -165,3 +199,13 @@ def normalize_patches(
         return []
 
     return PatchProposal.from_iterable(response.patches, vulnerability_id=context.vulnerability_id)
+
+
+def dspy_is_available() -> bool:
+    """Return ``True`` when the optional DSPy dependency can be imported."""
+
+    module, _ = _import_dspy()
+    return module is not None
+
+
+__all__ = ["PatchSuggestionProgram", "DSPyResponse", "normalize_patches", "dspy_is_available"]

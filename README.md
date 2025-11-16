@@ -120,6 +120,29 @@ the locally hosted model instead of relying on a remote API. You can substitute
 `deepseek-ai/deepseek-coder-1.3b-instruct`) if memory is constrained. The first
 run will download the model weights to the local Hugging Face cache.
 
+## Toggling DSPy-backed fixes
+
+The remediation pipeline automatically uses DSPy when it is installed and falls
+back to the heuristic patch generator when the dependency is missing. Install
+DSPy before kicking off a scan—for example, grab the latest commit from the
+official repository:
+
+```bash
+pip install -U "git+https://github.com/stanfordnlp/dspy"
+```
+
+If you want to enforce DSPy-backed fixes (for example, in environments where
+the heuristics should never run), set the `MCP_REQUIRE_DSPY` flag. The
+remediation stage raises an error unless DSPy is importable when the flag is
+truthy:
+
+```bash
+export MCP_REQUIRE_DSPY=1
+```
+
+Unset the variable—or explicitly assign `0`—to allow the heuristics to run when
+DSPy is unavailable.
+
 ## Running the HTTP service via Docker
 
 The repository now includes a lightweight HTTP service that exposes the

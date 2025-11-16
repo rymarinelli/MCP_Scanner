@@ -214,7 +214,10 @@ def test_run_semgrep_scan_falls_back_when_remote_config_unavailable(
     assert skipped == ["owasp-top-ten"]
 
 
-def test_generate_remediations_creates_summary(tmp_path: Path) -> None:
+def test_generate_remediations_creates_summary(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("MCP_REQUIRE_DSPY", raising=False)
     output = RunnerOutput(
         status="ok",
         normalized_exit_code=0,
@@ -240,6 +243,28 @@ def test_generate_remediations_creates_summary(tmp_path: Path) -> None:
     assert "semgrep_results" in artifacts
     assert artifacts["semgrep_results"].endswith("semgrep_results.json")
     assert "dspy_summary" in artifacts
+
+
+def test_generate_remediations_requires_dspy_when_requested(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    output = RunnerOutput(
+        status="ok",
+        normalized_exit_code=0,
+        semgrep_exit_code=0,
+        command=["semgrep"],
+        results={"results": []},
+        stderr=None,
+    )
+
+    rag_context_path = tmp_path / "rag_context.json"
+    rag_context_path.write_text(json.dumps({"graph": {"nodes": {}, "edges": []}, "node_context": {}}))
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+
+    monkeypatch.setenv("MCP_REQUIRE_DSPY", "1")
+    with pytest.raises(ScanExecutionError, match="MCP_REQUIRE_DSPY is set"):
+        generate_remediations(output, tmp_path, rag_context_path, repo_path)
 
 
 def test_perform_scan_happy_path(monkeypatch: pytest.MonkeyPatch) -> None:

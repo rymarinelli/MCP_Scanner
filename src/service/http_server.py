@@ -15,6 +15,7 @@ from .operations import ScanExecutionError, perform_scan, resolve_github_token
 LOGGER = logging.getLogger("mcp_scanner.service")
 
 SCAN_HANDLER = perform_scan
+MAX_REQUEST_BODY_BYTES = 1_048_576  # 1 MiB limit to mitigate request flooding
 
 
 def _json_response(payload: Dict[str, Any]) -> bytes:
@@ -59,6 +60,33 @@ class MCPRequestHandler(BaseHTTPRequestHandler):
             payload["error"].update(details)
         self._send_json(status, payload)
 
+    def _drain_request_body(self, length: int) -> None:
+        """Read and discard ``length`` bytes to keep the socket in sync."""
+
+        remaining = length
+        chunk_size = 65536
+        timeout = None
+        try:
+            timeout = self.connection.gettimeout()
+            self.connection.settimeout(1.0)
+        except OSError:
+            timeout = None
+
+        try:
+            while remaining > 0:
+                chunk = self.rfile.read(min(remaining, chunk_size))
+                if not chunk:
+                    break
+                remaining -= len(chunk)
+        except OSError:
+            # If the client disconnects early we can stop draining.
+            pass
+        finally:
+            try:
+                self.connection.settimeout(timeout)
+            except OSError:
+                pass
+
     def _read_json_body(self) -> Tuple[Dict[str, Any], bool]:
         content_length = self.headers.get("Content-Length")
         if content_length is None:
@@ -69,6 +97,18 @@ class MCPRequestHandler(BaseHTTPRequestHandler):
             length = int(content_length)
         except ValueError:
             self._send_error(HTTPStatus.BAD_REQUEST, "Invalid Content-Length header")
+            return {}, False
+
+        if length <= 0:
+            self._send_error(HTTPStatus.BAD_REQUEST, "Content-Length must be a positive integer")
+            return {}, False
+
+        if length > MAX_REQUEST_BODY_BYTES:
+            self._drain_request_body(length)
+            self._send_error(
+                HTTPStatus.REQUEST_ENTITY_TOO_LARGE,
+                f"Request body exceeds {MAX_REQUEST_BODY_BYTES} bytes",
+            )
             return {}, False
 
         raw_body = self.rfile.read(length)

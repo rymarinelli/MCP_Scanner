@@ -46,6 +46,16 @@ _PR_BODY_TRUNCATION_NOTICE = (
 _ENV_ASSIGNMENT = re.compile(r"^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$")
 
 
+def _env_flag(name: str, default: bool = False) -> bool:
+    """Return ``True`` when the given environment variable is truthy."""
+
+    value = os.getenv(name)
+    if value is None:
+        return default
+    normalized = value.strip().lower()
+    return normalized not in {"", "0", "false", "no"}
+
+
 def _format_command(command: Sequence[str]) -> str:
     """Return a shell-quoted representation of ``command`` for logging."""
 
@@ -1342,6 +1352,15 @@ def generate_remediations(
     LOGGER.info("Semgrep findings saved to %s", findings_path)
 
     suggester = RemediationSuggester(output_dir=workspace / "remediations", repo_root=repo_path)
+    require_dspy = _env_flag("MCP_REQUIRE_DSPY", default=False)
+    using_dspy = getattr(suggester.program, "uses_dspy", False)
+    if require_dspy and not using_dspy:
+        raise ScanExecutionError(
+            "DSPy is required for remediation because MCP_REQUIRE_DSPY is set. "
+            "Unset the flag or set MCP_REQUIRE_DSPY=0 to allow heuristics. "
+            'Install DSPy before rerunning, e.g. `pip install -U "git+https://github.com/stanfordnlp/dspy"`. '
+            "The command from a virtual environment ensures the DSPy modules can import the configured LLM."
+        )
     LOGGER.info(
         "Initializing DSPy remediation driver (output_markdown=%s)",
         workspace / "dspy_suggestions.md",
