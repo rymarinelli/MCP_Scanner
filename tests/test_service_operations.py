@@ -242,6 +242,28 @@ def test_generate_remediations_creates_summary(tmp_path: Path) -> None:
     assert "dspy_summary" in artifacts
 
 
+def test_generate_remediations_requires_dspy_when_requested(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    output = RunnerOutput(
+        status="ok",
+        normalized_exit_code=0,
+        semgrep_exit_code=0,
+        command=["semgrep"],
+        results={"results": []},
+        stderr=None,
+    )
+
+    rag_context_path = tmp_path / "rag_context.json"
+    rag_context_path.write_text(json.dumps({"graph": {"nodes": {}, "edges": []}, "node_context": {}}))
+    repo_path = tmp_path / "repo"
+    repo_path.mkdir()
+
+    monkeypatch.setenv("MCP_REQUIRE_DSPY", "1")
+    with pytest.raises(ScanExecutionError, match="DSPy is required"):
+        generate_remediations(output, tmp_path, rag_context_path, repo_path)
+
+
 def test_perform_scan_happy_path(monkeypatch: pytest.MonkeyPatch) -> None:
     def fake_clone(repo_url, branch, workspace):  # type: ignore[no-redef]
         path = workspace / "repo"

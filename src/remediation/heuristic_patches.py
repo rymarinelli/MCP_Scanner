@@ -43,7 +43,6 @@ class HeuristicPatchGenerator:
             "llm.insecure-model-invocation.insecure-transport": self._enforce_secure_model_invocation,
             "llm.unsafe-tool-exec.subprocess-shell": self._enforce_tool_allowlist,
             "llm.unsafe-tool-exec.os-system": self._enforce_os_allowlist,
-            "python.flask.security.injection.tainted-sql-string": self._parameterize_flask_sql,
         }
 
     # ------------------------------------------------------------------
@@ -318,75 +317,6 @@ class HeuristicPatchGenerator:
             """
         ).strip("\n")
         return f"{helper_block}\n\n{text}", True
-
-    def _parameterize_flask_sql(self, context: "VulnerabilityContext") -> _PatchResult | None:
-        """Rewrite vulnerable Flask SQL handlers to use parameterised queries."""
-
-        loaded = self._load_target(context)
-        if not loaded:
-            return None
-        rel_path, target_path, original_text = loaded
-
-        secure_search = textwrap.dedent(
-            """
-            def search():
-                q = request.args.get("q", "")
-                results = None
-                if q:
-                    db = get_db()
-                    cur = db.cursor()
-                    sql = "SELECT id, username FROM users WHERE username LIKE ?;"
-                    like_pattern = f"%{q}%"
-                    cur.execute(sql, (like_pattern,))
-                    results = cur.fetchall()
-                return render_template_string(SEARCH_HTML, results=results)
-            """
-        ).strip("\n")
-
-        secure_login = textwrap.dedent(
-            """
-            def login():
-                user = None
-                if request.method == "POST":
-                    username = request.form.get("username", "")
-                    password = request.form.get("password", "")
-                    db = get_db()
-                    cur = db.cursor()
-                    sql = (
-                        "SELECT id, username FROM users WHERE username = ? "
-                        "AND password = ? LIMIT 1;"
-                    )
-                    cur.execute(sql, (username, password))
-                    row = cur.fetchone()
-                    user = row
-                return render_template_string(LOGIN_HTML, user=user)
-            """
-        ).strip("\n")
-
-        updated_text = original_text
-        changed = False
-
-        updated_text, search_changed = self._replace_function(updated_text, "search", secure_search)
-        changed = changed or search_changed
-
-        updated_text, login_changed = self._replace_function(updated_text, "login", secure_login)
-        changed = changed or login_changed
-
-        if not changed:
-            return None
-
-        diff = self._make_diff(rel_path, original_text, updated_text)
-        rationale = (
-            "Use parameterised SQL queries to prevent injection vulnerabilities in the Flask demo app. "
-            "The rewritten handlers avoid manual string concatenation and safely bind untrusted user input."
-        )
-        target_path.write_text(updated_text, encoding="utf-8")
-        return _PatchResult(
-            file_path=rel_path,
-            diff=diff,
-            rationale=rationale,
-            confidence=0.55,
-        )
 
     def _enforce_tool_allowlist(self, context: "VulnerabilityContext") -> _PatchResult | None:
         """Replace shell=True execution with an allow-listed subprocess invocation."""

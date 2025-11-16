@@ -15,6 +15,8 @@ try:  # pragma: no cover - import guard for optional dependency
 except ImportError:  # pragma: no cover - fallback if DSPy is unavailable
     dspy = None  # type: ignore[assignment]
 
+DSPY_AVAILABLE = dspy is not None
+
 
 def _format_dict(data: Dict[str, Any], prefix: str = "") -> str:
     """Format a dictionary into a deterministic, human-friendly string."""
@@ -86,6 +88,8 @@ if dspy is not None:  # pragma: no cover - requires DSPy at runtime
     class PatchSuggestionProgram(dspy.Module):
         """DSPy module that generates remediation patches from vulnerability context."""
 
+        uses_dspy = True
+
         def __init__(self, *, instructions: Optional[str] = None):
             super().__init__()
             self.instructions = instructions or (
@@ -112,6 +116,8 @@ else:
 
     class PatchSuggestionProgram:
         """Fallback implementation when DSPy is unavailable."""
+
+        uses_dspy = False
 
         def __init__(
             self,
@@ -165,3 +171,12 @@ def normalize_patches(
         return []
 
     return PatchProposal.from_iterable(response.patches, vulnerability_id=context.vulnerability_id)
+
+
+def dspy_is_available() -> bool:
+    """Return ``True`` when the optional DSPy dependency can be imported."""
+
+    return DSPY_AVAILABLE
+
+
+__all__ = ["PatchSuggestionProgram", "DSPyResponse", "normalize_patches", "dspy_is_available"]

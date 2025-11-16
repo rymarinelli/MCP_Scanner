@@ -120,6 +120,21 @@ the locally hosted model instead of relying on a remote API. You can substitute
 `deepseek-ai/deepseek-coder-1.3b-instruct`) if memory is constrained. The first
 run will download the model weights to the local Hugging Face cache.
 
+## Requiring DSPy-backed fixes
+
+By default the remediation pipeline falls back to heuristic patches when DSPy
+is not installed. If you want the scan to fail rather than emit placeholder
+diffs, set the `MCP_REQUIRE_DSPY` flag before invoking the service:
+
+```bash
+export MCP_REQUIRE_DSPY=1
+```
+
+With the flag enabled the remediation stage raises an error unless the optional
+`dspy-ai` package is available. Install it via `pip install dspy-ai` (or
+`pip install -e .[dev]`) so the DSPy programs can call into your configured LLM
+and produce real code changes for the scanned repository.
+
 ## Running the HTTP service via Docker
 
 The repository now includes a lightweight HTTP service that exposes the

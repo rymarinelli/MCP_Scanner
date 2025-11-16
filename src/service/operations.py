@@ -46,6 +46,16 @@ _PR_BODY_TRUNCATION_NOTICE = (
 _ENV_ASSIGNMENT = re.compile(r"^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*)$")
 
 
+def _env_flag(name: str, default: bool = False) -> bool:
+    """Return ``True`` when the given environment variable is truthy."""
+
+    value = os.getenv(name)
+    if value is None:
+        return default
+    normalized = value.strip().lower()
+    return normalized not in {"", "0", "false", "no"}
+
+
 def _format_command(command: Sequence[str]) -> str:
     """Return a shell-quoted representation of ``command`` for logging."""
 
@@ -1342,6 +1352,11 @@ def generate_remediations(
     LOGGER.info("Semgrep findings saved to %s", findings_path)
 
     suggester = RemediationSuggester(output_dir=workspace / "remediations", repo_root=repo_path)
+    if _env_flag("MCP_REQUIRE_DSPY") and not getattr(suggester.program, "uses_dspy", False):
+        raise ScanExecutionError(
+            "DSPy is required for remediation (set MCP_REQUIRE_DSPY=0 to allow heuristics). "
+            "Install the optional dependency with 'pip install dspy-ai' before rerunning."
+        )
     LOGGER.info(
         "Initializing DSPy remediation driver (output_markdown=%s)",
         workspace / "dspy_suggestions.md",
