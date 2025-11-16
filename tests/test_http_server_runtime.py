@@ -164,6 +164,38 @@ def test_scan_endpoint_rejects_non_string_token(monkeypatch):
         thread.join(timeout=1)
 
 
+def test_scan_endpoint_rejects_oversized_payload(monkeypatch):
+    from service import http_server
+
+    def fake_handler(**_: object):  # type: ignore[no-redef]
+        raise AssertionError("handler should not be invoked for oversized payloads")
+
+    original_handler = http_server.SCAN_HANDLER
+    http_server.SCAN_HANDLER = fake_handler
+
+    server = http_server.ThreadingHTTPServer(("127.0.0.1", 0), http_server.MCPRequestHandler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    time.sleep(0.1)
+
+    try:
+        host, port = server.server_address
+        conn = HTTPConnection(host, port)
+        padding = "x" * (http_server.MAX_REQUEST_BODY_BYTES + 1)
+        payload = json.dumps({"repo_url": "https://example.com/repo.git", "padding": padding})
+        conn.request("POST", "/scan", body=payload, headers={"Content-Type": "application/json"})
+        response = conn.getresponse()
+        body = json.loads(response.read())
+
+        assert response.status == 413
+        assert body["status"] == "error"
+        assert "exceeds" in body["error"]["message"]
+    finally:
+        http_server.SCAN_HANDLER = original_handler
+        server.shutdown()
+        thread.join(timeout=1)
+
+
 def test_scan_endpoint_uses_env_token_when_missing(monkeypatch):
     from service import http_server
 
